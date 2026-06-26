@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. // System Interface</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts for premium sci-fi typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-cyan">
+    <!-- Fullscreen Loading Overlay -->
+    <div id="loading-screen" class="loading-overlay">
+        <div class="loader-container">
+            <div class="loader-ring"></div>
+            <div class="loader-logo">JARVIS</div>
+            <div class="loader-text">INITIALIZING QUANTUM SYSTEMS...</div>
+            <div class="progress-bar-container">
+                <div id="loader-progress-bar" class="progress-bar-fill"></div>
+            </div>
+            <div id="loader-percentage" class="progress-percentage">0%</div>
+        </div>
+    </div>
+
+    <!-- Scanline effect across the entire interface -->
+    <div class="scanlines"></div>
+
+    <!-- Main Container -->
+    <main id="hud-container" class="hud-grid">
+        <!-- TOP STATUS BAR -->
+        <header id="top-bar" class="hud-panel top-panel">
+            <div class="panel-corner top-left"></div>
+            <div class="panel-corner top-right"></div>
+            
+            <div class="header-branding">
+                <div class="branding-pulse"></div>
+                <h1 class="branding-title">J.A.R.V.I.S. <span class="branding-version"> MARK II</span></h1>
+            </div>
+            
+            <div class="system-status-indicator">
+                <span class="status-label">SYS_CORE:</span>
+                <span class="status-value text-glow">ACTIVE</span>
+            </div>
+
+            <!-- Digital Clock & Date -->
+            <div class="datetime-display">
+                <span id="hud-date" class="date-text">---, -- --- ----</span>
+                <span id="hud-time" class="time-text text-glow">00:00:00 AM</span>
+            </div>
+
+            <!-- Network Status Widget -->
+            <div id="network-widget" class="network-display">
+                <div class="network-item">
+                    <span class="net-label">NET:</span>
+                    <span id="net-status" class="net-val text-glow">ONLINE</span>
+                </div>
+                <div class="network-item">
+                    <span class="net-label">PING:</span>
+                    <span id="net-ping" class="net-val">-- ms</span>
+                </div>
+                <div class="network-item">
+                    <span class="net-label">DL:</span>
+                    <span id="net-download" class="net-val">-- Mbps</span>
+                </div>
+                <div class="network-item">
+                    <span class="net-label">UL:</span>
+                    <span id="net-upload" class="net-val">-- Mbps</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- LEFT SIDEBAR - SYSTEM DIAGNOSTICS -->
+        <section id="left-sidebar" class="hud-panel sidebar-left">
+            <div class="panel-corner top-left"></div>
+            <div class="panel-corner bottom-left"></div>
+            <h2 class="panel-title">SYSTEM DIAGNOSTICS</h2>
+            
+            <div class="diagnostics-ring-container">
+                <!-- CPU Progress Ring -->
+                <div class="ring-widget">
+                    <svg class="progress-svg" viewBox="0 0 100 100">
+                        <circle class="ring-bg" cx="50" cy="50" r="40"></circle>
+                        <circle id="cpu-ring" class="ring-progress" cx="50" cy="50" r="40"></circle>
+                    </svg>
+                    <div class="ring-content">
+                        <span id="cpu-percent-text" class="ring-val">0%</span>
+                        <span class="ring-lbl">CPU</span>
+                    </div>
+                </div>
+
+                <!-- RAM Progress Ring -->
+                <div class="ring-widget">
+                    <svg class="progress-svg" viewBox="0 0 100 100">
+                        <circle class="ring-bg" cx="50" cy="50" r="40"></circle>
+                        <circle id="ram-ring" class="ring-progress" cx="50" cy="50" r="40"></circle>
+                    </svg>
+                    <div class="ring-content">
+                        <span id="ram-percent-text" class="ring-val">0%</span>
+                        <span class="ring-lbl">RAM</span>
+                    </div>
+                </div>
+
+                <!-- Disk Progress Ring -->
+                <div class="ring-widget">
+                    <svg class="progress-svg" viewBox="0 0 100 100">
+                        <circle class="ring-bg" cx="50" cy="50" r="40"></circle>
+                        <circle id="disk-ring" class="ring-progress" cx="50" cy="50" r="40"></circle>
+                    </svg>
+                    <div class="ring-content">
+                        <span id="disk-percent-text" class="ring-val">0%</span>
+                        <span class="ring-lbl">DISK</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Stats Panel -->
+            <div class="details-list">
+                <div class="details-row">
+                    <span class="details-label">CORE TEMP</span>
+                    <span class="details-val text-glow">42°C</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">RAM ALLOCATION</span>
+                    <span id="ram-details-text" class="details-val">0.0/0.0 GB</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">STORAGE</span>
+                    <span id="disk-details-text" class="details-val">--- GB Free</span>
+                </div>
+                <div class="details-row">
+                    <span class="details-label">QUANTUM CORES</span>
+                    <span class="details-val">ACTIVE (16)</span>
+                </div>
+            </div>
+
+            <div class="hologram-grid-decor"></div>
+        </section>
+
+        <!-- CENTER 3D VIEWPORT -->
+        <section id="center-viewport" class="viewport-3d">
+            <!-- Three.js Canvas Container -->
+            <div id="canvas-container"></div>
+            
+            <!-- Target overlay graphic -->
+            <div class="target-reticle">
+                <div class="reticle-ring ring-outer"></div>
+                <div class="reticle-ring ring-middle"></div>
+                <div class="reticle-ring ring-inner"></div>
+                <div class="reticle-crosshair"></div>
+            </div>
+            
+            <!-- Hologram Label -->
+            <div class="model-floating-label">
+                <div class="model-id">MODEL: IRON MAN MARK LXXXV</div>
+                <div class="model-status">SYSTEM INTEGRITY: 100%</div>
+            </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR - ENVIRONMENTAL INTEL & NEWS -->
+        <section id="right-sidebar" class="hud-panel sidebar-right">
+            <div class="panel-corner top-right"></div>
+            <div class="panel-corner bottom-right"></div>
+            <h2 class="panel-title">ENVIRONMENTAL INTEL</h2>
+            
+            <!-- Weather Sub-Panel -->
+            <div class="weather-widget">
+                <div class="weather-main">
+                    <div class="weather-temp-container">
+                        <span id="weather-temp" class="weather-temp text-glow">--°C</span>
+                        <span id="weather-desc" class="weather-desc">RETRIEVING DATA...</span>
+                    </div>
+                </div>
+                <div class="weather-stats">
+                    <div class="w-stat-item">
+                        <span class="w-lbl">CITY</span>
+                        <span id="weather-city" class="w-val">--</span>
+                    </div>
+                    <div class="w-stat-item">
+                        <span class="w-lbl">HUMIDITY</span>
+                        <span id="weather-humidity" class="w-val">--%</span>
+                    </div>
+                    <div class="w-stat-item">
+                        <span class="w-lbl">WIND SPEED</span>
+                        <span id="weather-wind" class="w-val">-- m/s</span>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="panel-title spacer-title">GLOBAL NEWS FEED</h2>
+            <!-- News Ticker -->
+            <div class="news-widget">
+                <div id="news-container" class="news-list">
+                    <div class="news-item">System boot complete. Initializing satellite link...</div>
+                </div>
+            </div>
+            
+            <div class="hologram-radar-decor">
+                <div class="radar-sweep"></div>
+            </div>
+        </section>
+
+        <!-- BOTTOM CONTROL DECK -->
+        <footer id="bottom-bar" class="hud-panel bottom-panel">
+            <div class="panel-corner bottom-left"></div>
+            <div class="panel-corner bottom-right"></div>
+            
+            <!-- Rotation Controls -->
+            <div class="control-group">
+                <span class="control-label">ROTATION SYSTEM:</span>
+                <button id="btn-play-pause" class="hud-btn btn-active">PAUSE</button>
+                <div class="slider-container">
+                    <span class="slider-val-lbl">SPEED:</span>
+                    <input type="range" id="rotation-speed" class="hud-slider" min="0" max="50" value="10">
+                    <span id="speed-display" class="slider-numeric">1.0x</span>
+                </div>
+            </div>
+
+            <!-- Center Reset Control -->
+            <div class="control-group center-control">
+                <button id="btn-reset-cam" class="hud-btn">ALIGN SCANNER</button>
+            </div>
+
+            <!-- Style/Theme Selector -->
+            <div class="control-group">
+                <span class="control-label">ENERGY MATRIX:</span>
+                <div class="theme-buttons">
+                    <button id="theme-cyan" class="theme-btn active" data-theme="cyan" title="Jarvis Cyan">CYAN</button>
+                    <button id="theme-red" class="theme-btn" data-theme="red" title="Stark Red">RED</button>
+                    <button id="theme-gold" class="theme-btn" data-theme="gold" title="Stealth Gold">GOLD</button>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Eel Library Served Dynamically by Python Backend -->
+    <script type="text/javascript" src="/eel.js"></script>
+
+    <!-- Three.js Libraries from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <!-- App Logic -->
+    <script src="script.js"></script>
+</body>
+</html>

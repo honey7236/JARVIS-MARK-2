@@ -1,4 +1,7 @@
-from groq import Groq  # Importing the Groq library to use its API.
+try:
+    from backend.groq_client import Groq
+except ImportError:
+    from groq_client import Groq
 from json import load, dump  # Importing functions to read and write JSON files.
 import datetime  # Importing the datetime module for real-time date and time information.
 from dotenv import load_dotenv, dotenv_values  # Importing dotenv_values to read environment variables from a .env file.

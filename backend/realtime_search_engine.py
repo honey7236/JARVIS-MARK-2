@@ -1,7 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import unquote
-from groq import Groq  # Importing the Groq library to use its API.
+from urllib.parse import unquote, quote
+try:
+    from backend.groq_client import Groq
+except ImportError:
+    from groq_client import Groq
 from json import load, dump # Importing functions to read and write JSON files.
 import datetime # Importing the datetime module for real-time date and time information.
 from dotenv import dotenv_values  # Importing dotenv_values to read environment variables from a .env file.
@@ -20,7 +23,9 @@ client = Groq(api_key=GroqAPIKey)
 #Define the system instructions for the chatbot.
 System = f"""Hello, I am {Username}, You are a very accurate and advanced AI chatbot named {Assistantname} which has real-time up-to-date information from the internet.
 *** Provide Answers In a Professional Way, make sure to add full stops, commas, question marks, and use proper grammar.***
-*** Just answer the question from the provided data in a professional way. ***"""
+*** Just answer the question from the provided data in a professional way. ***
+*** Keep the answer clean, very short, and highly accurate. Summarize the answer in 2-3 concise, direct sentences. ***
+*** Avoid bullet points, lists, introductory phrases (such as "According to the search results..."), and conversational filler. Just state the facts directly. ***"""
 
 # Try to load the chat log from a JSON file, or create an empty one if it doesn't exist.
 messages = []
@@ -42,10 +47,12 @@ def GoogleSearch(query):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     }
-    url = "https://lite.duckduckgo.com/lite/"
     results = []
+    
+    # Try 1: DuckDuckGo Lite
     try:
-        resp = requests.post(url, headers=headers, data={"q": query}, timeout=10)
+        url = "https://lite.duckduckgo.com/lite/"
+        resp = requests.post(url, headers=headers, data={"q": query}, timeout=6)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, "html.parser")
             links = soup.find_all("a", class_="result-link")
@@ -65,8 +72,35 @@ def GoogleSearch(query):
                 results.append(SearchResult(title, snippet, href))
                 if len(results) >= 5:
                     break
-    except Exception as e:
-        print(f"Search error: {e}")
+    except Exception:
+        pass
+
+    # Try 2: Mojeek (Robust Fallback)
+    if not results:
+        try:
+            url = f"https://www.mojeek.com/search?q={quote(query)}"
+            resp = requests.get(url, headers=headers, timeout=6)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                li_items = soup.find_all("li")
+                for li in li_items:
+                    title_a = li.find("a", class_="title")
+                    if title_a:
+                        title = title_a.text.strip()
+                        href = title_a.get("href")
+                        
+                        snippet_p = li.find("p", class_="s")
+                        snippet = snippet_p.text.strip() if snippet_p else ""
+                        
+                        if snippet_p and snippet_p.find("span", class_="url"):
+                            url_span = snippet_p.find("span", class_="url")
+                            snippet = snippet.replace(url_span.text, "").strip()
+                            
+                        results.append(SearchResult(title, snippet, href))
+                        if len(results) >= 5:
+                            break
+        except Exception:
+            pass
 
     Answer = f"The Search results for '{query}' are:\n[start]\n"
     for i in results:
@@ -130,7 +164,7 @@ def RealtimeSearchEngine(prompt):
         model="llama-3.3-70b-versatile",
         messages=messages_to_send,
         temperature=0.7,
-        max_tokens=2048,
+        max_tokens=1024,
         top_p=1,
         stream=True,
         stop=None

@@ -38,6 +38,7 @@ def QueryModifier(Query):
 # Main Execution
 def MainExecution():
     try:
+        # speak("initializing jarvis. i am listening sir...")
         TaskExecution = False
         ImageExecution = False
         ImageGenerationQuery = ""
@@ -118,7 +119,12 @@ def MainExecution():
                     speak(Answer)
                     os._exit(1)
     except Exception as e:
-        print(f"Error in MainExecution: {e}")
+        err_msg = str(e).lower()
+        if "getaddrinfo" in err_msg or "connection" in err_msg or "resolve" in err_msg or "offline" in err_msg:
+            print(f"Network connection error in MainExecution: {e}. Retrying in 5 seconds...")
+            sleep(5)
+        else:
+            print(f"Error in MainExecution: {e}")
         return False
             
 if __name__ == "__main__":

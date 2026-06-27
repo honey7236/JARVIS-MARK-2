@@ -494,27 +494,75 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 3000);
 
         // Mock Weather
-        document.getElementById("weather-temp").textContent = "26°C";
-        document.getElementById("weather-desc").textContent = "PARTLY CLOUDY";
-        document.getElementById("weather-city").textContent = "MALIBU";
-        document.getElementById("weather-humidity").textContent = "62%";
-        document.getElementById("weather-wind").textContent = "4.2 m/s";
+        function fetchMockWeather() {
+            const btn = document.getElementById("btn-refresh-weather");
+            if (btn) btn.classList.add("refreshing");
+            setTimeout(() => {
+                const temps = ["24°C", "26°C", "27°C", "25°C", "28°C"];
+                const descs = ["PARTLY CLOUDY", "CLEAR SKY", "OVERCAST CLOUDS", "LIGHT RAIN"];
+                const humidities = ["58%", "62%", "65%", "60%"];
+                const winds = ["3.8 m/s", "4.2 m/s", "5.1 m/s", "2.9 m/s"];
+                
+                const tempEl = document.getElementById("weather-temp");
+                const descEl = document.getElementById("weather-desc");
+                const cityEl = document.getElementById("weather-city");
+                const humidityEl = document.getElementById("weather-humidity");
+                const windEl = document.getElementById("weather-wind");
+
+                if (tempEl) tempEl.textContent = temps[Math.floor(Math.random() * temps.length)];
+                if (descEl) descEl.textContent = descs[Math.floor(Math.random() * descs.length)];
+                if (cityEl) cityEl.textContent = "MALIBU";
+                if (humidityEl) humidityEl.textContent = humidities[Math.floor(Math.random() * humidities.length)];
+                if (windEl) windEl.textContent = winds[Math.floor(Math.random() * winds.length)];
+
+                if (btn) btn.classList.remove("refreshing");
+            }, 600);
+        }
 
         // Mock News
-        const news = [
-            "Arc Reactor output stabilized at 100%.",
-            "Satellite link established with Stark Industries Orbiters.",
-            "House Party Protocol modules running diagnostic checks...",
-            "Mark LXXXV nanotech shell integrity verified."
-        ];
-        const container = document.getElementById("news-container");
-        container.innerHTML = "";
-        news.forEach(item => {
-            const div = document.createElement("div");
-            div.className = "news-item";
-            div.textContent = item;
-            container.appendChild(div);
-        });
+        function fetchMockNews() {
+            const btn = document.getElementById("btn-refresh-news");
+            if (btn) btn.classList.add("refreshing");
+            setTimeout(() => {
+                const newsPool = [
+                    "Arc Reactor output stabilized at 100%.",
+                    "Satellite link established with Stark Industries Orbiters.",
+                    "House Party Protocol modules running diagnostic checks...",
+                    "Mark LXXXV nanotech shell integrity verified.",
+                    "Friday AI assistant diagnostic report: Optimal.",
+                    "Deep Space telemetry scanning sector 4-B.",
+                    "Stark Tower mainframe firewall upgraded.",
+                    "Nanoparticle distribution flow: 99.8% precision."
+                ];
+                const shuffled = newsPool.sort(() => 0.5 - Math.random());
+                const selected = shuffled.slice(0, 4);
+                const container = document.getElementById("news-container");
+                if (container) {
+                    container.innerHTML = "";
+                    selected.forEach(item => {
+                        const div = document.createElement("div");
+                        div.className = "news-item";
+                        div.textContent = item;
+                        container.appendChild(div);
+                    });
+                }
+                if (btn) btn.classList.remove("refreshing");
+            }, 600);
+        }
+
+        // Initial mock load
+        fetchMockWeather();
+        fetchMockNews();
+
+        // Bind refresh button click events
+        const refWeatherBtn = document.getElementById("btn-refresh-weather");
+        if (refWeatherBtn) {
+            refWeatherBtn.addEventListener("click", fetchMockWeather);
+        }
+        const refNewsBtn = document.getElementById("btn-refresh-news");
+        if (refNewsBtn) {
+            refNewsBtn.addEventListener("click", fetchMockNews);
+        }
     }
 
     // Check if running inside Eel environment
@@ -569,7 +617,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // C. Fetch Environmental weather and global news
-        async function fetchEnvironmentalIntel() {
+        async function fetchWeatherData() {
+            const btn = document.getElementById("btn-refresh-weather");
+            if (btn) btn.classList.add("refreshing");
             try {
                 // Fetch weather
                 const weatherData = await eel.display_weather_data()();
@@ -588,7 +638,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else if (typeof weatherData === "string") {
                     if (descEl) descEl.textContent = weatherData.toUpperCase();
                 }
+            } catch (err) {
+                console.error("Error fetching weather data from python:", err);
+            } finally {
+                setTimeout(() => {
+                    if (btn) btn.classList.remove("refreshing");
+                }, 600);
+            }
+        }
 
+        async function fetchNewsData() {
+            const btn = document.getElementById("btn-refresh-news");
+            if (btn) btn.classList.add("refreshing");
+            try {
                 // Fetch news feeds
                 const newsString = await eel.get_news_data()();
                 const newsContainer = document.getElementById("news-container");
@@ -606,19 +668,505 @@ document.addEventListener("DOMContentLoaded", () => {
                     });
                 }
             } catch (err) {
-                console.error("Error fetching environmental data from python:", err);
+                console.error("Error fetching news data from python:", err);
+            } finally {
+                setTimeout(() => {
+                    if (btn) btn.classList.remove("refreshing");
+                }, 600);
             }
         }
 
         // Start Polling loops
         fetchSystemDiagnostics();
-        fetchEnvironmentalIntel();
+        fetchWeatherData();
+        fetchNewsData();
 
         setInterval(fetchSystemDiagnostics, 4000);   // Poll system info every 4 seconds
-        setInterval(fetchEnvironmentalIntel, 60000);  // Poll weather & news every 60 seconds
+
+        // Bind refresh button click events
+        const refWeatherBtn = document.getElementById("btn-refresh-weather");
+        if (refWeatherBtn) {
+            refWeatherBtn.addEventListener("click", fetchWeatherData);
+        }
+        const refNewsBtn = document.getElementById("btn-refresh-news");
+        if (refNewsBtn) {
+            refNewsBtn.addEventListener("click", fetchNewsData);
+        }
 
     } else {
         // Fallback to simulation mode if opened directly in browser without Eel backend
         runMockStats();
     }
+
+    // ------------------------------------------
+    // 11. Custom Settings Panels, Profiles, Chat & Onboarding Flow
+    // ------------------------------------------
+    let currentChatLogJson = "";
+    
+    // UI Elements for settings and profile
+    const settingsModal = document.getElementById("settings-modal");
+    const onboardingScreen = document.getElementById("onboarding-screen");
+    
+    const btnOpenSettings = document.getElementById("btn-open-settings");
+    const btnCloseSettings = document.getElementById("close-settings-modal");
+    
+    const profileBadge = document.getElementById("user-profile-badge");
+    const profileDropdown = document.getElementById("profile-dropdown");
+    const btnEditIdentity = document.getElementById("btn-edit-identity");
+    
+    // Modal Open/Close helpers with smooth display + opacity transition
+    function showModal(modal) {
+        if (!modal) return;
+        modal.style.display = "flex";
+        // Trigger reflow
+        modal.offsetHeight;
+        modal.classList.add("active");
+    }
+    
+    function hideModal(modal) {
+        if (!modal) return;
+        modal.classList.remove("active");
+        setTimeout(() => {
+            if (!modal.classList.contains("active")) {
+                modal.style.display = "none";
+            }
+        }, 300); // Wait for transition fade-out (300ms)
+    }
+
+    if (btnOpenSettings) {
+        btnOpenSettings.addEventListener("click", () => {
+            // Load both forms
+            loadPersonalInfoForm();
+            loadApiKeysForm();
+            // Switch to default tab (Personal info)
+            switchTab("tab-personal");
+            showModal(settingsModal);
+        });
+    }
+    
+    if (btnCloseSettings) {
+        btnCloseSettings.addEventListener("click", () => {
+            hideModal(settingsModal);
+        });
+    }
+    
+    // Profile badge hover/click toggles
+    if (profileBadge && profileDropdown) {
+        profileBadge.addEventListener("click", (e) => {
+            e.stopPropagation();
+            profileDropdown.classList.toggle("active");
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener("click", () => {
+            profileDropdown.classList.remove("active");
+        });
+        
+        profileDropdown.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    if (btnEditIdentity) {
+        btnEditIdentity.addEventListener("click", () => {
+            if (profileDropdown) profileDropdown.classList.remove("active");
+            loadPersonalInfoForm();
+            loadApiKeysForm();
+            switchTab("tab-personal");
+            showModal(settingsModal);
+        });
+    }
+
+    // Modal Tabs Navigation binding
+    const tabButtons = document.querySelectorAll(".modal-tabs .tab-btn");
+    const tabContents = document.querySelectorAll(".tab-content");
+    
+    function switchTab(targetId) {
+        tabButtons.forEach(btn => {
+            if (btn.getAttribute("data-target") === targetId) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+        
+        tabContents.forEach(content => {
+            if (content.id === targetId) {
+                content.style.display = "block";
+                content.classList.add("active");
+            } else {
+                content.style.display = "none";
+                content.classList.remove("active");
+            }
+        });
+    }
+    
+    tabButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const target = btn.getAttribute("data-target");
+            switchTab(target);
+        });
+    });
+
+    // Dynamically manage Groq API key rows in API configuration panel
+    const groqContainer = document.getElementById("groq-keys-container");
+    const btnAddGroqKey = document.getElementById("btn-add-groq-key");
+    
+    function createGroqKeyRow(val = "") {
+        const row = document.createElement("div");
+        row.className = "key-input-row";
+        
+        const input = document.createElement("input");
+        input.type = "password";
+        input.className = "hud-input groq-key-input";
+        input.placeholder = "Enter Groq API Key";
+        input.value = val;
+        
+        const btnRemove = document.createElement("button");
+        btnRemove.className = "btn-remove-key";
+        btnRemove.textContent = "REMOVE";
+        btnRemove.addEventListener("click", () => {
+            row.remove();
+        });
+        
+        row.appendChild(input);
+        row.appendChild(btnRemove);
+        return row;
+    }
+    
+    if (btnAddGroqKey) {
+        btnAddGroqKey.addEventListener("click", () => {
+            if (groqContainer) {
+                groqContainer.appendChild(createGroqKeyRow());
+            }
+        });
+    }
+    
+    // Load and render API configuration keys
+    async function loadApiKeysForm() {
+        if (typeof eel === "undefined") return;
+        try {
+            const keys = await eel.get_api_keys()();
+            if (groqContainer) {
+                groqContainer.innerHTML = "";
+                const groqKeys = keys.GroqAPIKeys || [];
+                if (groqKeys.length === 0) {
+                    groqContainer.appendChild(createGroqKeyRow());
+                } else {
+                    groqKeys.forEach(k => {
+                        groqContainer.appendChild(createGroqKeyRow(k));
+                    });
+                }
+            }
+            
+            const cohereInput = document.getElementById("input-cohere");
+            const hfInput = document.getElementById("input-hf");
+            const weatherInput = document.getElementById("input-weather");
+            const gnewsInput = document.getElementById("input-gnews");
+            
+            if (cohereInput) cohereInput.value = keys.cohere || "";
+            if (hfInput) hfInput.value = keys.HuggingFaceAPIKey || "";
+            if (weatherInput) weatherInput.value = keys.OpenWeatherAPIKey || "";
+            if (gnewsInput) gnewsInput.value = keys.GNewsAPIKey || "";
+        } catch (err) {
+            console.error("Error loading API keys:", err);
+        }
+    }
+    
+    // Save API configuration keys
+    const btnSaveApi = document.getElementById("btn-save-api");
+    if (btnSaveApi) {
+        btnSaveApi.addEventListener("click", async () => {
+            if (typeof eel === "undefined") return;
+            
+            // Gather Groq keys
+            const groqInputs = document.querySelectorAll(".groq-key-input");
+            const groqKeys = [];
+            groqInputs.forEach(input => {
+                const val = input.value.trim ? input.value.trim() : input.value;
+                if (val) groqKeys.push(val);
+            });
+            
+            const cohereVal = document.getElementById("input-cohere") ? document.getElementById("input-cohere").value.trim() : "";
+            const hfVal = document.getElementById("input-hf") ? document.getElementById("input-hf").value.trim() : "";
+            const weatherVal = document.getElementById("input-weather") ? document.getElementById("input-weather").value.trim() : "";
+            const gnewsVal = document.getElementById("input-gnews") ? document.getElementById("input-gnews").value.trim() : "";
+            
+            const updatedKeys = {
+                GroqAPIKeys: groqKeys,
+                cohere: cohereVal,
+                HuggingFaceAPIKey: hfVal,
+                OpenWeatherAPIKey: weatherVal,
+                GNewsAPIKey: gnewsVal
+            };
+            
+            btnSaveApi.textContent = "SAVING...";
+            try {
+                const res = await eel.save_api_keys(updatedKeys)();
+                if (res && res.success) {
+                    btnSaveApi.textContent = "SAVED SUCCESS";
+                    setTimeout(() => {
+                        btnSaveApi.textContent = "SAVE CONFIGURATION";
+                        hideModal(settingsModal);
+                        updateProfileWidgets();
+                    }, 800);
+                } else {
+                    btnSaveApi.textContent = "ERROR SAVING";
+                    alert("Error saving: " + (res.error || "Unknown error"));
+                    setTimeout(() => { btnSaveApi.textContent = "SAVE CONFIGURATION"; }, 1500);
+                }
+            } catch (err) {
+                console.error("Error saving API keys:", err);
+                btnSaveApi.textContent = "ERROR";
+                setTimeout(() => { btnSaveApi.textContent = "SAVE CONFIGURATION"; }, 1500);
+            }
+        });
+    }
+    
+    // Load and render Personal Info configuration
+    async function loadPersonalInfoForm() {
+        if (typeof eel === "undefined") return;
+        try {
+            const info = await eel.get_personal_info()();
+            const usernameInput = document.getElementById("input-username");
+            const assistantInput = document.getElementById("input-assistantname");
+            
+            if (usernameInput) usernameInput.value = info.Username || "";
+            if (assistantInput) assistantInput.value = info.Assistantname || "";
+        } catch (err) {
+            console.error("Error loading personal info:", err);
+        }
+    }
+    
+    // Save Personal Info configuration
+    const btnSavePersonal = document.getElementById("btn-save-personal");
+    if (btnSavePersonal) {
+        btnSavePersonal.addEventListener("click", async () => {
+            if (typeof eel === "undefined") return;
+            
+            const usernameVal = document.getElementById("input-username") ? document.getElementById("input-username").value.trim() : "";
+            const assistantVal = document.getElementById("input-assistantname") ? document.getElementById("input-assistantname").value.trim() : "";
+            
+            if (!usernameVal || !assistantVal) {
+                alert("Username and Assistant Core name cannot be empty.");
+                return;
+            }
+            
+            const info = {
+                Username: usernameVal,
+                Assistantname: assistantVal
+            };
+            
+            btnSavePersonal.textContent = "UPDATING...";
+            try {
+                const res = await eel.save_personal_info(info)();
+                if (res && res.success) {
+                    btnSavePersonal.textContent = "UPDATE SUCCESS";
+                    setTimeout(() => {
+                        btnSavePersonal.textContent = "UPDATE IDENTITY";
+                        hideModal(settingsModal);
+                        updateProfileWidgets();
+                    }, 800);
+                } else {
+                    btnSavePersonal.textContent = "ERROR UPDATING";
+                    alert("Error: " + (res.error || "Unknown error"));
+                    setTimeout(() => { btnSavePersonal.textContent = "UPDATE IDENTITY"; }, 1500);
+                }
+            } catch (err) {
+                console.error("Error updating identity info:", err);
+                btnSavePersonal.textContent = "ERROR";
+                setTimeout(() => { btnSavePersonal.textContent = "UPDATE IDENTITY"; }, 1500);
+            }
+        });
+    }
+    
+    // Update profile badge and Secure User card dropdown
+    async function updateProfileWidgets() {
+        if (typeof eel === "undefined") return;
+        try {
+            const info = await eel.get_personal_info()();
+            const keys = await eel.get_api_keys()();
+            
+            const profileUsername = document.getElementById("profile-username");
+            const cardUsername = document.getElementById("card-username");
+            const cardAssistantname = document.getElementById("card-assistantname");
+            const cardKeysStatus = document.getElementById("card-keys-status");
+            
+            if (profileUsername) profileUsername.textContent = info.Username || "USER";
+            if (cardUsername) cardUsername.textContent = info.Username || "---";
+            if (cardAssistantname) cardAssistantname.textContent = info.Assistantname || "---";
+            
+            // Build keys text (e.g. "3 GROQ / WEATHER")
+            let keyTextParts = [];
+            const numGroq = (keys.GroqAPIKeys || []).length;
+            if (numGroq > 0) keyTextParts.push(`${numGroq} GROQ`);
+            if (keys.cohere) keyTextParts.push("COHERE");
+            if (keys.HuggingFaceAPIKey) keyTextParts.push("HF");
+            if (keys.OpenWeatherAPIKey) keyTextParts.push("WEATHER");
+            if (keys.GNewsAPIKey) keyTextParts.push("GNEWS");
+            
+            if (cardKeysStatus) {
+                cardKeysStatus.textContent = keyTextParts.join(" / ") || "NO KEYS MOUNTED";
+            }
+        } catch (err) {
+            console.error("Error updating profile widgets:", err);
+        }
+    }
+    
+    // Onboarding login setup logic
+    const btnInitSystem = document.getElementById("btn-initialize-system");
+    if (btnInitSystem) {
+        btnInitSystem.addEventListener("click", async () => {
+            if (typeof eel === "undefined") {
+                alert("Offline mode: Python backend not linked.");
+                if (onboardingScreen) onboardingScreen.style.display = "none";
+                return;
+            }
+            
+            const obUsername = document.getElementById("ob-username") ? document.getElementById("ob-username").value.trim() : "";
+            const obAssistant = document.getElementById("ob-assistantname") ? document.getElementById("ob-assistantname").value.trim() : "";
+            const obGroq = document.getElementById("ob-groq-key") ? document.getElementById("ob-groq-key").value.trim() : "";
+            const obCohere = document.getElementById("ob-cohere-key") ? document.getElementById("ob-cohere-key").value.trim() : "";
+            const obHf = document.getElementById("ob-hf-key") ? document.getElementById("ob-hf-key").value.trim() : "";
+            
+            if (!obUsername || !obAssistant || !obGroq) {
+                alert("Please fill in Username, Assistant name, and a primary Groq API Key.");
+                return;
+            }
+            
+            btnInitSystem.textContent = "INITIALIZING CORE...";
+            try {
+                // Save personal info
+                const infoRes = await eel.save_personal_info({ Username: obUsername, Assistantname: obAssistant })();
+                // Save api keys
+                const apiRes = await eel.save_api_keys({
+                    GroqAPIKeys: [obGroq],
+                    cohere: obCohere,
+                    HuggingFaceAPIKey: obHf,
+                    OpenWeatherAPIKey: "",
+                    GNewsAPIKey: ""
+                })();
+                
+                if (infoRes && infoRes.success && apiRes && apiRes.success) {
+                    btnInitSystem.textContent = "CORE PROTOCOL ONLINE";
+                    setTimeout(() => {
+                        if (onboardingScreen) {
+                            onboardingScreen.style.transition = "opacity 1s ease";
+                            onboardingScreen.style.opacity = 0;
+                            setTimeout(() => {
+                                onboardingScreen.style.display = "none";
+                            }, 1000);
+                        }
+                        if (profileBadge) profileBadge.style.display = "flex";
+                        updateProfileWidgets();
+                        // Trigger weather and news fetches now that we have keys
+                        if (typeof fetchWeatherData === "function") fetchWeatherData();
+                        if (typeof fetchNewsData === "function") fetchNewsData();
+                    }, 1000);
+                } else {
+                    btnInitSystem.textContent = "INITIALIZATION FAILED";
+                    const errMsg = (!infoRes || !infoRes.success) ? (infoRes.error || "Personal info error") : (apiRes.error || "API key error");
+                    alert("Initialization error: " + errMsg);
+                    setTimeout(() => { btnInitSystem.textContent = "INITIALIZE CORE PROTOCOL"; }, 1500);
+                }
+            } catch (err) {
+                console.error("Error initializing core onboarding:", err);
+                btnInitSystem.textContent = "ERROR INITIALIZING";
+                setTimeout(() => { btnInitSystem.textContent = "INITIALIZE CORE PROTOCOL"; }, 1500);
+            }
+        });
+    }
+    
+    // Check login status at boot
+    async function checkLoginStatus() {
+        if (typeof eel === "undefined") {
+            // Render simulation state for local browser previews
+            if (profileBadge) profileBadge.style.display = "flex";
+            return;
+        }
+        
+        try {
+            const res = await eel.check_login_status()();
+            if (res && res.logged_in) {
+                // Already logged in - bypass onboarding, show profile badge
+                if (onboardingScreen) onboardingScreen.style.display = "none";
+                if (profileBadge) profileBadge.style.display = "flex";
+                updateProfileWidgets();
+            } else {
+                // Not logged in - show onboarding screen, hide profile badge
+                if (onboardingScreen) onboardingScreen.style.display = "flex";
+                if (profileBadge) profileBadge.style.display = "none";
+            }
+        } catch (err) {
+            console.error("Error checking login status:", err);
+            // Default show onboarding just in case
+            if (onboardingScreen) onboardingScreen.style.display = "flex";
+        }
+    }
+    
+    checkLoginStatus();
+    
+    // Real-time Chat log polling and incremental rendering
+    const chatLogContainer = document.getElementById("sidebar-chat-log");
+    
+    async function pollChatLog() {
+        if (typeof eel === "undefined") {
+            // Simulated messages in offline mode
+            if (chatLogContainer && chatLogContainer.children.length === 0) {
+                chatLogContainer.innerHTML = `
+                    <div class="chat-bubble system-bubble">DIAGNOSTIC CHANNEL CONNECTED</div>
+                    <div class="chat-bubble assistant-bubble">Greeting User. Telemetry matrices online. Ready for command.</div>
+                `;
+            }
+            return;
+        }
+        
+        try {
+            const messages = await eel.get_chat_log()();
+            const serialized = JSON.stringify(messages);
+            if (serialized !== currentChatLogJson) {
+                currentChatLogJson = serialized;
+                renderChatLog(messages);
+            }
+        } catch (err) {
+            console.error("Error polling chat log:", err);
+        }
+    }
+    
+    function renderChatLog(messages) {
+        if (!chatLogContainer) return;
+        chatLogContainer.innerHTML = "";
+        
+        if (!messages || messages.length === 0) {
+            const systemLog = document.createElement("div");
+            systemLog.className = "chat-bubble system-bubble";
+            systemLog.textContent = "NO RECENT CHAT LOGS DETECTED";
+            chatLogContainer.appendChild(systemLog);
+            return;
+        }
+        
+        messages.forEach(msg => {
+            const bubble = document.createElement("div");
+            const role = (msg.role || "").toLowerCase();
+            const content = msg.content || "";
+            
+            if (role === "user") {
+                bubble.className = "chat-bubble user-bubble";
+            } else if (role === "assistant" || role === "friday" || role === "jarvis") {
+                bubble.className = "chat-bubble assistant-bubble";
+            } else {
+                bubble.className = "chat-bubble system-bubble";
+            }
+            
+            bubble.textContent = content;
+            chatLogContainer.appendChild(bubble);
+        });
+        
+        // Auto-scroll chat log to bottom
+        chatLogContainer.scrollTop = chatLogContainer.scrollHeight;
+    }
+    
+    // Poll chat log every 1.5 seconds
+    pollChatLog();
+    setInterval(pollChatLog, 1500);
 });

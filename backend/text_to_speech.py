@@ -1,8 +1,9 @@
+import os # Import os for file path handling
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # Suppress pygame welcome message banner
 import pygame # Import pygame library for handling audio playback
 import random # Import random for generating random choices
 import asyncio # Import asyncio for asynchronous operations
 import edge_tts # Import edge_tts for text-to-speech functionality
-import os # Import os for file path handling
 from dotenv import dotenv_values # Import dotenv for reading environment variables from a .env file
 
 # Load environment variables from the .env file.
@@ -22,7 +23,8 @@ async def TextToAudioFile(text) -> None:
     
 # Function to manage Text-to-Speech (TTS) functionality.
 def TTS(Text, func=lambda r=None: True):
-    while True:
+    retries = 3
+    for attempt in range(retries):
         try:
             # Convert text to an audio file asynchronously.
             asyncio.run(TextToAudioFile(Text))
@@ -43,7 +45,12 @@ def TTS(Text, func=lambda r=None: True):
             return True  # Return True if the audio played successfully.
         
         except Exception as e:  # Handle any exceptions during the process
-            print(f"Error in TTS: {e}")
+            print(f"Error in TTS (attempt {attempt + 1}/{retries}): {e}")
+            if attempt < retries - 1:
+                from time import sleep
+                sleep(1)
+            else:
+                return False
             
         finally:
             try:

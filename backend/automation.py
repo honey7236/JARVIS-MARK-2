@@ -1,5 +1,6 @@
 from logging import exception
 import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # Suppress pygame welcome message banner
 import sys
 import time
 import random
@@ -29,7 +30,10 @@ import pywhatkit.core.core
 pywhatkit.core.core.check_connection = lambda: None
 
 from pywhatkit import search, playonyt
-from groq import Groq
+try:
+    from backend.groq_client import Groq
+except ImportError:
+    from groq_client import Groq
 
 # Project-specific imports
 from backend.text_to_speech import speak
@@ -46,8 +50,7 @@ OpenWeatherAPIKey = env_vars.get("OpenWeatherAPIKey")
 GNewsAPIKey = env_vars.get("GNewsAPIKey")
 API_KEY = OpenWeatherAPIKey
 
-ran_online_DLG = random.choice(online_DLG)
-ran_offline_DLG = random.choice(offline_DLG)
+# Greetings will be chosen dynamically on each check to keep responses fresh.
 
 cached_network_data = {
     "status": "Checking...",
@@ -159,10 +162,10 @@ def is_online(url="http://www.google.com", timeout=5):
 
 def internet_status():
     if is_online():
-        speak(ran_online_DLG)
+        speak(random.choice(online_DLG))
         print("sir, i am online and ready to assist you")
     else:
-        speak(ran_offline_DLG)
+        speak(random.choice(offline_DLG))
         print("sir i am offline, please check your internet connection")
 
 

@@ -6,11 +6,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 from dotenv import dotenv_values
 import os
 import mtranslate as mt
+import time
 
 # Load environment variables from the .env file.
 env_vars = dotenv_values(".env")
 # Get the input language setting from the environment variables.
-InputLanguage = env_vars.get("InputLanguage")
+InputLanguage = env_vars.get("InputLanguage") or "en"
 
 # Define the HTML code for the speech recognition interface.
 HtmlCode = '''<!DOCTYPE html>
@@ -70,6 +71,9 @@ chrome_options.add_argument(f'user-agent={user_agent}')
 chrome_options.add_argument("--use-fake-ui-for-media-stream")
 chrome_options.add_argument("--use-fake-device-for-media-stream")
 chrome_options.add_argument("--headless=new")
+chrome_options.add_argument("--log-level=3")  # Suppress Chrome log spam
+chrome_options.add_argument("--silent")  # Quiet mode
+chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])  # Silence USB/Bluetooth warnings on Windows
 # Initialize the Chrome WebDriver using the ChromeDriverManager.
 service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -131,10 +135,16 @@ def listen():
                 else:
                     # If the input language is not English, translate the text and return it.
                     SetAssistantStatus("Translating...")
-                    return QueryModifier(UniversalTranslator(Text))
+                    try:
+                        return QueryModifier(UniversalTranslator(Text))
+                    except Exception as trans_err:
+                        print(f"Translation network error: {trans_err}")
+                        return QueryModifier(Text)
                 
         except Exception as e:
             pass
+            
+        time.sleep(0.2)  # Prevent 100% CPU spinning while waiting for voice input
         
 # Main Execution Block.
 if __name__ == "__main__":

@@ -86,6 +86,7 @@ while True:
             
     except Exception as e:
         print(e)
+        sleep(1)
         
     # except:
     #     pass

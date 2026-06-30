@@ -565,7 +565,7 @@ def process_automation(c):
         return None
 
     # close tab or general close app
-    if "close tab" in command_text:
+    if "close it" in command_text:
         import pyautogui
         import time
         time.sleep(0.5)

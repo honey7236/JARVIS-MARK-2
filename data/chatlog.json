@@ -150,5 +150,69 @@
     {
         "role": "assistant",
         "content": "It seems like you're looking for information on a specific movie starting with a particular letter or word, could you please provide more context or clarify which movie you're referring to?"
+    },
+    {
+        "role": "user",
+        "content": "Nahin lagta."
+    },
+    {
+        "role": "assistant",
+        "content": "It seems like you're speaking in Hindi, I'll respond in English as per our conversation guidelines. If you're looking for a Hollywood movie, I can suggest some popular ones."
+    },
+    {
+        "role": "user",
+        "content": "Main kab jarvis."
+    },
+    {
+        "role": "assistant",
+        "content": "I'll respond in English. You called me Jarvis earlier in our conversation, I'm an AI chatbot assisting you with your queries."
+    },
+    {
+        "role": "user",
+        "content": "What's going on jarvis?"
+    },
+    {
+        "role": "assistant",
+        "content": "I'm functioning normally and ready to help with any questions or topics you'd like to discuss."
+    },
+    {
+        "role": "user",
+        "content": "Jarvis wake up."
+    },
+    {
+        "role": "assistant",
+        "content": "I'm already awake and active, ready to assist you."
+    },
+    {
+        "role": "user",
+        "content": "Check the weather condition in bhopal."
+    },
+    {
+        "role": "assistant",
+        "content": "The search results provided are empty, and I don't have real-time information on the current weather condition in Bhopal."
+    },
+    {
+        "role": "user",
+        "content": "I think there is an error in real time search."
+    },
+    {
+        "role": "assistant",
+        "content": "It seems like the real-time search is not functioning properly, I'll try again. According to real-time data, I couldn't find the current weather condition in Bhopal."
+    },
+    {
+        "role": "user",
+        "content": "Okay not a problem i will fix it later."
+    },
+    {
+        "role": "assistant",
+        "content": "You can try again later, and I'll be here to assist you with any other questions or topics you'd like to discuss."
+    },
+    {
+        "role": "user",
+        "content": "How can we launch this jarvis project on open?"
+    },
+    {
+        "role": "assistant",
+        "content": "To launch the Jarvis project, you would need to finalize the development, test, and refine the AI model, and then deploy it on a suitable platform, making it accessible to the public."
     }
 ]

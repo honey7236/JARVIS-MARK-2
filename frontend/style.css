@@ -212,6 +212,29 @@ body {
 .status-value {
     font-weight: bold;
     color: var(--theme-color);
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+.status-value.listening {
+    color: #00ffaa !important;
+    text-shadow: 0 0 10px rgba(0, 255, 170, 0.8), 0 0 20px rgba(0, 255, 170, 0.4) !important;
+}
+.status-value.thinking, .status-value.translating {
+    color: #ffaa00 !important;
+    text-shadow: 0 0 10px rgba(255, 170, 0, 0.8), 0 0 20px rgba(255, 170, 0, 0.4) !important;
+    animation: status-pulse-thinking 1s infinite alternate ease-in-out;
+}
+.status-value.answering {
+    color: #ff2a2a !important;
+    text-shadow: 0 0 10px rgba(255, 42, 42, 0.8), 0 0 20px rgba(255, 42, 42, 0.4) !important;
+}
+.status-value.active {
+    color: var(--theme-color);
+    text-shadow: var(--theme-glow);
+}
+
+@keyframes status-pulse-thinking {
+    from { opacity: 0.85; }
+    to { opacity: 1; text-shadow: 0 0 15px rgba(255, 170, 0, 1), 0 0 25px rgba(255, 170, 0, 0.6) !important; }
 }
 
 .datetime-display {

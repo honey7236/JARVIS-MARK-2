@@ -590,6 +590,40 @@ document.addEventListener("DOMContentLoaded", () => {
             if (netUpload) netUpload.textContent = data.upload;
         }
 
+        // Expose updateStatus function to python to receive core state updates
+        eel.expose(updateStatus);
+        function updateStatus(status) {
+            console.log("[Eel] J.A.R.V.I.S. Core State transition:", status);
+            const statusEl = document.getElementById("sys-core-status");
+            if (statusEl) {
+                statusEl.textContent = status.toUpperCase();
+                // Clear existing state classes
+                statusEl.classList.remove("listening", "thinking", "answering", "translating", "active");
+                // Add the new state class
+                statusEl.classList.add(status.toLowerCase().replace("...", "").trim());
+            }
+
+            // Sync 3D Hologram characteristics with system state
+            const stateKey = status.toLowerCase().replace("...", "").trim();
+            if (state.lights && state.lights.reactorGlow) {
+                if (stateKey === "listening") {
+                    state.baseRotationSpeed = 0.025; // Speed up rotation to show attention
+                    state.lights.reactorGlow.color.setHex(0x00ffaa); // Glowing cyan-green
+                } else if (stateKey === "thinking" || stateKey === "translating") {
+                    state.baseRotationSpeed = 0.05; // Spin rapidly to represent heavy computation
+                    state.lights.reactorGlow.color.setHex(0xffaa00); // Glowing amber
+                } else if (stateKey === "answering") {
+                    state.baseRotationSpeed = 0.005; // Slow down during vocal reply
+                    state.lights.reactorGlow.color.setHex(0xff2a2a); // Stark red warning/attention core
+                } else {
+                    // Reset to active/idle state defaults
+                    state.baseRotationSpeed = 0.01;
+                    const currentThemeCfg = themeConfigs[state.theme] || themeConfigs.cyan;
+                    state.lights.reactorGlow.color.setHex(currentThemeCfg.pointHex);
+                }
+            }
+        }
+
         // B. Poll System diagnostics periodically
         async function fetchSystemDiagnostics() {
             try {

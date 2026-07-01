@@ -8,14 +8,30 @@ env_vars = dotenv_values(".env")
 # Retrieve API key.
 CohereAPIKey = env_vars.get("CohereAPIKey") or env_vars.get("cohere")
 
-# Create a Cohere client using the provided API key.
-co = cohere.Client(api_key=CohereAPIKey)
+co = None
+
+def get_cohere_client():
+    global co
+    if co is not None:
+        return co
+    global env_vars, CohereAPIKey
+    env_vars = dotenv_values(".env")
+    CohereAPIKey = env_vars.get("CohereAPIKey") or env_vars.get("cohere")
+    if not CohereAPIKey or "your_cohere_api_key" in CohereAPIKey.lower():
+        return None
+    try:
+        import cohere
+        co = cohere.Client(api_key=CohereAPIKey)
+        return co
+    except Exception as e:
+        print(f"[CommandManager] Failed to initialize Cohere client: {e}")
+        return None
 
 # Define a list of recognized function keywords for task categorization.
 funcs = [
     "exit", "general", "realtime", "open", "close", "play",
     "generate image", "system", "content", "google search",
-    "youtube search", "reminder"
+    "youtube search", "reminder", "weather", "news"
 ]
 
 # Initialize an empty list to store user messages.
@@ -27,7 +43,7 @@ You are a very accurate Decision-Making Model, which decides what kind of a quer
 You will decide whether a query is a 'general' query, a 'realtime' query, or is asking to perform any task or automation like 'open facebook, instagram', 'can you write a application and open it in notepad'
 *** Do not answer any query, just decide what kind of query is given to you. ***
 -> Respond with 'general ( query )' if a query can be answered by a llm model (conversational ai chatbot) and doesn't require any up to date information like if the query is 'who was akbar?' respond with 'general who was akbar?', if the query is 'how can i study more effectively?' respond with 'general how can i study more effectively?', if the query is 'can you help me with this math problem?' respond with 'general can you help me with this math problem?', if the query is 'Thanks, i really liked it.' respond with 'general thanks, i really liked it.' , if the query is 'what is python programming language?' respond with 'general what is python programming language?', etc. Respond with 'general (query)' if a query doesn't have a proper noun or is incomplete like if the query is 'who is he?' respond with 'general who is he?', if the query is 'what's his networth?' respond with 'general what's his networth?', if the query is 'tell me more about him.' respond with 'general tell me more about him.', and so on even if it require up-to-date information to answer. Respond with 'general (query)' if the query is asking about time, day, date, month, year, etc like if the query is 'what's the time?' respond with 'general what's the time?'.
--> Respond with 'realtime ( query )' if a query can not be answered by a llm model (because they don't have realtime data) and requires up to date information like if the query is 'who is indian prime minister' respond with 'realtime who is indian prime minister', if the query is 'tell me about facebook's recent update.' respond with 'realtime tell me about facebook's recent update.', if the query is 'tell me news about coronavirus.' respond with 'realtime tell me news about coronavirus.', etc and if the query is asking about any individual or thing like if the query is 'who is akshay kumar' respond with 'realtime who is akshay kumar', if the query is 'what is today's news?' respond with 'realtime what is today's news?', if the query is 'what is today's headline?' respond with 'realtime what is today's headline?', etc.
+-> Respond with 'realtime ( query )' if a query can not be answered by a llm model (because they don't have realtime data) and requires up to date information like if the query is 'who is indian prime minister' respond with 'realtime who is indian prime minister', if the query is 'tell me about facebook's recent update.' respond with 'realtime tell me about facebook's recent update.', if the query is 'who won the match yesterday?' respond with 'realtime who won the match yesterday?', etc and if the query is asking about any individual or thing like if the query is 'who is akshay kumar' respond with 'realtime who is akshay kumar'.
 -> Respond with 'open (application name or website name)' if a query is asking to open any application like 'open facebook', 'open telegram', etc. but if the query is asking to open multiple applications, respond with 'open 1st application name, open 2nd application name' and so on.
 -> Respond with 'close (application name)' if a query is asking to close any application like 'close notepad', 'close facebook', etc. but if the query is asking to close multiple applications or websites, respond with 'close 1st application name, close 2nd application name' and so on.
 -> Respond with 'play (song name)' if a query is asking to play any song like 'play afsanay by ys', 'play let her go', etc. but if the query is asking to play multiple songs, respond with 'play 1st song name, play 2nd song name' and so on.
@@ -37,6 +53,8 @@ You will decide whether a query is a 'general' query, a 'realtime' query, or is 
 -> Respond with 'content (topic)' if a query is asking to write any type of content like application, codes, emails or anything else about a specific topic but if the query is asking to write multiple types of content, respond with 'content 1st topic, content 2nd topic' and so on.
 -> Respond with 'google search (topic)' if a query is asking to search a specific topic on google but if the query is asking to search multiple topics on google, respond with 'google search 1st topic, google search 2nd topic' and so on.
 -> Respond with 'youtube search (topic)' if a query is asking to search a specific topic on youtube but if the query is asking to search multiple topics on youtube, respond with 'youtube search 1st topic, youtube search 2nd topic' and so on.
+-> Respond with 'weather' if a query is asking about the current weather, forecast, or temperature like 'what is the weather today?', 'how is the temperature in New York?', 'is it raining outside?', 'weather status', etc.
+-> Respond with 'news' if a query is asking for news headlines, current news, global news, etc. like 'tell me the news', 'what is today's news?', 'what are the latest news headlines?', 'give me the news feed', etc.
 *** If the query is asking to perform multiple tasks like 'open facebook, telegram and close whatsapp' respond with 'open facebook, open telegram, close whatsapp' ***
 *** If the user is saying goodbye or wants to end the conversation like 'bye jarvis.' respond with 'exit'.***
 *** Respond with 'general (query)' if you can't decide the kind of query or if a query is asking to perform a task which is not mentioned above. ***
@@ -61,7 +79,9 @@ ChatHistory = [
         "message": "general what is today's date, reminder 11:00pm 5th aug dancing performance"
     },
     {"role": "User", "message": "chat with me."},
-    {"role": "Chatbot", "message": "general chat with me."}
+    {"role": "Chatbot", "message": "general chat with me."},
+    {"role": "User", "message": "how is the weather in Delhi and what is the news?"},
+    {"role": "Chatbot", "message": "weather, news"}
 ]
 
 # Define the main function for decision-making on queries.
@@ -69,24 +89,62 @@ def FirstLayerDMM(prompt: str = "test"):
     # Add the user's query to the messages list.
     messages.append({"role": "user", "content": f"{prompt}"})
 
-    # Create a streaming chat session with the Cohere model.
-    stream = co.chat_stream(
-        model='command-r-plus-08-2024',  # Specify the Cohere model to use.
-        message=prompt,          # Pass the user's query.
-        temperature=0.7,         # Set the creativity level of the model.
-        chat_history=ChatHistory,  # Provide the predefined chat history for context.
-        prompt_truncation='OFF',   # Ensure the prompt is not truncated.
-        connectors=[],             # No additional connectors are used.
-        preamble=preamble          # Pass the detailed instruction preamble.
-    )
+    client = get_cohere_client()
+    if not client:
+        # Fallback local parser if Cohere is not configured
+        prompt_lower = prompt.lower().strip()
+        if "weather" in prompt_lower:
+            return ["weather"]
+        elif "news" in prompt_lower:
+            return ["news"]
+        elif prompt_lower.startswith("open "):
+            return [prompt_lower]
+        elif prompt_lower.startswith("close "):
+            return [prompt_lower]
+        elif prompt_lower.startswith("play "):
+            return [prompt_lower]
+        elif "bye" in prompt_lower or "exit" in prompt_lower:
+            return ["exit"]
+        else:
+            return [f"general {prompt}"]
 
-    # Initialize an empty string to store the generated response.
-    response = ""
+    try:
+        # Create a streaming chat session with the Cohere model.
+        stream = client.chat_stream(
+            model='command-r-plus',  # Specify the Cohere model to use.
+            message=prompt,          # Pass the user's query.
+            temperature=0.7,         # Set the creativity level of the model.
+            chat_history=ChatHistory,  # Provide the predefined chat history for context.
+            prompt_truncation='OFF',   # Ensure the prompt is not truncated.
+            connectors=[],             # No additional connectors are used.
+            preamble=preamble          # Pass the detailed instruction preamble.
+        )
 
-    # Iterate over events in the stream and capture text generation events.
-    for event in stream:
-        if event.event_type == "text-generation":
-            response += event.text  # Append generated text to the response.
+        # Initialize an empty string to store the generated response.
+        response = ""
+
+        # Iterate over events in the stream and capture text generation events.
+        for event in stream:
+            if event.event_type == "text-generation":
+                response += event.text  # Append generated text to the response.
+    except Exception as e:
+        print(f"[CommandManager] Cohere API error: {e}. Falling back to local parser.")
+        # Fallback to rule-based
+        prompt_lower = prompt.lower().strip()
+        if "weather" in prompt_lower:
+            return ["weather"]
+        elif "news" in prompt_lower:
+            return ["news"]
+        elif prompt_lower.startswith("open "):
+            return [prompt_lower]
+        elif prompt_lower.startswith("close "):
+            return [prompt_lower]
+        elif prompt_lower.startswith("play "):
+            return [prompt_lower]
+        elif "bye" in prompt_lower or "exit" in prompt_lower:
+            return ["exit"]
+        else:
+            return [f"general {prompt}"]
 
     # Remove newline characters and split responses...
     response = response.replace("\n", "")
@@ -107,12 +165,19 @@ def FirstLayerDMM(prompt: str = "test"):
     # Update the response with the filtered tasks.
     response = temp
 
-    # If '(query)' is in the response, recursively call the function for further clarification.
-    if "(query)" in response:
-        newresponse = FirstLayerDMM(prompt=prompt)
-        return newresponse  # Return the clarified response.
-    else:
-        return response  # Return the filtered response.
+    # If '(query)' or similar placeholder is in the response, replace with original prompt to avoid recursion
+    cleaned_response = []
+    for task in response:
+        if "(query)" in task or "( query )" in task:
+            replaced = task.replace("(query)", prompt).replace("( query )", prompt)
+            cleaned_response.append(replaced)
+        else:
+            cleaned_response.append(task)
+
+    if not cleaned_response:
+        return [f"general {prompt}"]
+
+    return cleaned_response
 
 # Entry point for the script.
 if __name__ == "__main__":

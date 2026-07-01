@@ -1,3 +1,4 @@
+import os
 try:
     from backend.groq_client import Groq
 except ImportError:
@@ -32,12 +33,16 @@ SystemChatBot = [
     {"role": "system", "content": System}
 ]
 
+# Ensure the Data directory exists before writing/reading the chat logs
+os.makedirs("Data", exist_ok=True)
+
 # Attempt to load the chat log from a JSON file.
 try:
     with open(r"Data\ChatLog.json", "r") as f:
         messages = load(f) # Load existing messages from the chat log.
-except FileNotFoundError:
-    # If the file doesn't exist, create an empty JSON file to store chat logs.
+except Exception:
+    # If the file doesn't exist or is corrupted, create/overwrite it as an empty JSON array.
+    messages = []
     with open(r"Data\ChatLog.json", "w") as f:
         dump([], f)
 
@@ -68,11 +73,16 @@ def AnswerModifier(Answer):
 # Main chatbot function to handle user queries.
 def ChatBot(Query, retries=1):
     """ This function sends the user's query to the chatbot and returns the AI's response. """
+    if not Query or not Query.strip():
+        return "I didn't catch that, could you please repeat?"
 
     try:
         # Load the existing chat log from the JSON file.
-        with open(r"Data\ChatLog.json", "r") as f:
-            messages = load(f)
+        try:
+            with open(r"Data\ChatLog.json", "r") as f:
+                messages = load(f)
+        except Exception:
+            messages = []
 
         # Append the user's query to the messages list.
         messages.append({"role": "user", "content": f"{Query}"})

@@ -33,8 +33,18 @@ headers = {"Authorization": f"Bearer {get_key('.env', 'HuggingFaceAPIKey')}"}
 
 # Async function to send a query to the Hugging Face API
 async def query(payload):
-    response = await asyncio.to_thread(requests.post, API_URL, headers=headers, json=payload)
-    return response.content
+    try:
+        response = await asyncio.to_thread(requests.post, API_URL, headers=headers, json=payload, timeout=20)
+        if response.status_code == 200:
+            if "image" in response.headers.get("Content-Type", ""):
+                return response.content
+            else:
+                print(f"[ImageGen] API returned non-image content: {response.text}")
+        else:
+            print(f"[ImageGen] API error {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"[ImageGen] Request exception: {e}")
+    return None
 
 # Async function to genrate images based on the given prompt
 async def generate_images(prompt: str):
@@ -51,10 +61,15 @@ async def generate_images(prompt: str):
     # Wait for all tasks to complete
     image_bytes_list = await asyncio.gather(*tasks)
     
+    # Ensure Data directory exists
+    os.makedirs("Data", exist_ok=True)
     # Save the generated images to files
     for i, image_bytes in enumerate(image_bytes_list):
-        with open(fr"Data\{prompt.replace(' ', '_')}{i + 1}.jpg", "wb") as f:
-            f.write(image_bytes)
+        if image_bytes:
+            with open(fr"Data\{prompt.replace(' ', '_')}{i + 1}.jpg", "wb") as f:
+                f.write(image_bytes)
+        else:
+            print(f"[ImageGen] Skipping image {i + 1} due to generation failure.")
             
 # Wrapper function to generate and open images
 def GenerateImages(prompt: str):
@@ -65,11 +80,20 @@ def GenerateImages(prompt: str):
 while True:
     
     try:
+        # Ensure the telemetry files directory exists
+        os.makedirs(r"Frontend\Files", exist_ok=True)
+        
         # Read the status and prompt from the data file
-        with open(r"Frontend\Files\ImageGeneration.data", "r") as f:
-            Data: str = f.read()
+        if os.path.exists(r"Frontend\Files\ImageGeneration.data"):
+            with open(r"Frontend\Files\ImageGeneration.data", "r") as f:
+                Data: str = f.read().strip()
+        else:
+            Data = "False,False"
             
-        Prompt, Status = Data.split(",")
+        if "," in Data:
+            Prompt, Status = Data.rsplit(",", 1)
+        else:
+            Prompt, Status = "False", "False"
         
         # If the status indicates an image generation request
         if Status == "True":
@@ -79,14 +103,11 @@ while True:
             # Reset the status in the data file after generating images
             with open(r"Frontend\Files\ImageGeneration.data", "w") as f:
                 f.write("False,False")
-                break  # Exit the loop after processing the request.
+            break  # Exit the loop after processing the request.
             
         else:
             sleep(1)  # Wait for 1 second before checking the status again.
             
     except Exception as e:
-        print(e)
+        print(f"Error in ImageGeneration: {e}")
         sleep(1)
-        
-    # except:
-    #     pass

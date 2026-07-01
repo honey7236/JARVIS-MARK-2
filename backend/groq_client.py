@@ -70,8 +70,6 @@ class Groq:
             with _global_lock:
                 if passed_key not in _global_keys:
                     _global_keys.append(passed_key)
-                    
-        self._ensure_sync()
 
     def _ensure_sync(self):
         """Synchronizes this instance with the globally active API key index."""

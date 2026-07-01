@@ -9,27 +9,23 @@
     <p id="output"></p>
     <script>
         const output = document.getElementById('output');
-        let recognition;
+        let recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en';
+        recognition.continuous = true;
+        let active = false;
+
+        recognition.onresult = (e) => { output.textContent += e.results[e.results.length - 1][0].transcript; };
+        recognition.onend = () => { if (active) try { recognition.start(); } catch(err) {} };
 
         function startRecognition() {
-            recognition = new webkitSpeechRecognition() || new SpeechRecognition();
-            recognition.lang = 'en';
-            recognition.continuous = true;
-
-            recognition.onresult = function(event) {
-                const transcript = event.results[event.results.length - 1][0].transcript;
-                output.textContent += transcript;
-            };
-
-            recognition.onend = function() {
-                recognition.start();
-            };
-            recognition.start();
+            active = true;
+            output.textContent = "";
+            try { recognition.start(); } catch(err) {}
         }
-
         function stopRecognition() {
-            recognition.stop();
-            output.innerHTML = "";
+            active = false;
+            try { recognition.stop(); } catch(err) {}
+            output.textContent = "";
         }
     </script>
 </body>

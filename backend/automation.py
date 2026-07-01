@@ -110,21 +110,20 @@ def battery_alert():
         battery = psutil.sensors_battery()
         
         if battery is None:
-            speak("Unable to get battery information.")
-            return
+            return "Unable to get battery information."
         
         percentage = int(battery.percent)
 
         if percentage == 100:
             alert100()
-            speak("Battery is fully charged. Please unplug the charger.")
+            return "Battery is fully charged. Please unplug the charger."
         elif percentage <= 20:
-            speak("Battery is low. Please plug in the charger.")
+            return "Battery is low. Please plug in the charger."
         else:
-            speak(f"Battery is at {percentage} percent")
+            return f"Battery is at {percentage} percent"
     except Exception as e:
         print("Battery Alert Error:", e)
-        speak("Sorry, I could not check the battery status.")
+        return "Sorry, I could not check the battery status."
 
 
 # ==========================================
@@ -162,11 +161,9 @@ def is_online(url="http://www.google.com", timeout=5):
 
 def internet_status():
     if is_online():
-        speak(random.choice(online_DLG))
-        print("sir, i am online and ready to assist you")
+        return random.choice(online_DLG)
     else:
-        speak(random.choice(offline_DLG))
-        print("sir i am offline, please check your internet connection")
+        return random.choice(offline_DLG)
 
 
 # ==========================================
@@ -291,8 +288,19 @@ def open_app(app, sess=requests.session()):
 # Play Music YouTube Automation
 # ==========================================
 def play_music_on_youtube(song_name):
+    song_clean = song_name.lower().strip()
+    try:
+        from data.musiclibrary import music_library
+        if song_clean in music_library:
+            url = music_library[song_clean]
+            webbrowser.open(url)
+            return f"Playing {song_name} from music library"
+    except Exception as e:
+        print("Error checking music library:", e)
+        
     import pywhatkit as pw
     pw.playonyt(song_name)
+    return f"Playing {song_name} on YouTube"
 
 
 # ==========================================
@@ -303,6 +311,8 @@ def take_screenshot():
     try:
         time.sleep(1)
         folder = os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop")
+        if not os.path.exists(folder):
+            folder = os.path.join(os.path.expanduser("~"), "Desktop")
         os.makedirs(folder, exist_ok=True)
 
         filename = f"screenshot_{int(time.time())}.png"
@@ -310,7 +320,7 @@ def take_screenshot():
 
         screenshot = pyautogui.screenshot()
         screenshot.save(path)
-        return f"Screenshot saved in Documents/Screenshots as {filename}"
+        return f"Screenshot saved on your Desktop as {filename}"
     except Exception as e:
         print("Screenshot Error:", e)
         return "Unable to take screenshot"
@@ -372,7 +382,17 @@ def reminder_loop():
             if now >= r["time"]:
                 message = f"Reminder: {r['task']}"
                 speak(message)
-                send_whatsapp_instant("+916376056667", message)
+                
+                # Show desktop notification
+                try:
+                    notification.notify(
+                        title="J.A.R.V.I.S. Reminder",
+                        message=r["task"],
+                        timeout=10
+                    )
+                except Exception:
+                    pass
+                
                 reminders.remove(r)
         time.sleep(5)
 
@@ -545,216 +565,12 @@ def send_whatsapp_instant(receiver, message):
         encoded_message = quote(message)
         url = f"https://web.whatsapp.com/send?phone={phone}&text={encoded_message}"
         webbrowser.open(url)
-        time.sleep(10)
+        time.sleep(15)
         pyautogui.hotkey("enter")
         return f"Message sent to {receiver}"
     except Exception as e:
         print("Error:", e)
         return "Failed to send message"
-
-
-# ==========================================
-# Command Processing / Automation Router
-# ==========================================
-def process_automation(c):
-    if not c or not isinstance(c, str):
-        return None
-
-    command_text = c.strip().lower()
-    if not command_text:
-        return None
-
-    # close tab or general close app
-    if "close it" in command_text:
-        import pyautogui
-        import time
-        time.sleep(0.5)
-        pyautogui.hotkey('alt', 'f4')
-        return "Closing tab"
-        
-    elif command_text.startswith("close"):
-        app_name = command_text.replace("close", "").strip()
-        from AppOpener import close as appclose
-        try:
-            appclose(app_name, match_closest=True, throw_error=True)
-            return f"Closing {app_name}"
-        except:
-            import pyautogui
-            pyautogui.hotkey('alt', 'f4')
-            return f"Attempted to close {app_name}"
-
-    # open website or app
-    elif command_text.startswith("open"):
-        result = open_app(c)
-        return result
-
-    # google search
-    elif command_text.startswith("google search"):
-        query = c.replace("google search", "", 1).strip()
-        if query:
-            url = f"https://www.google.com/search?q={quote(query)}"
-            webbrowser.open(url)
-            return f"Searching Google for {query}"
-        else:
-            return "What should I search for on Google?"
-
-    # youtube search
-    elif command_text.startswith("youtube search"):
-        query = c.replace("youtube search", "", 1).strip()
-        if query:
-            url = f"https://www.youtube.com/results?search_query={quote(query)}"
-            webbrowser.open(url)
-            return f"Searching YouTube for {query}"
-        else:
-            return "What should I search for on YouTube?"
-
-    # general search
-    elif command_text.startswith("search"):
-        query = command_text.replace("search", "").strip()
-        if query:
-            url = f"https://www.google.com/search?q={quote(query)}"
-            webbrowser.open(url)
-            return f"Searching for {query}"
-        else:
-            return "What should I search for?"
-
-    # run application
-    elif command_text.startswith("run"):
-        result = open_app(c)
-        return result
-
-    # play song on youtube
-    elif command_text.startswith("play"):
-        song = c.replace("play", "", 1).strip()
-        play_music_on_youtube(song)
-        return f"Playing {song} on YouTube"
-
-    # system control tasks
-    elif command_text.startswith("system"):
-        task = command_text.replace("system", "").strip()
-        import pyautogui
-        if "volume up" in task:
-            pyautogui.press("volumeup")
-            return "Volume increased"
-        elif "volume down" in task:
-            pyautogui.press("volumedown")
-            return "Volume decreased"
-        elif "mute" in task or "unmute" in task:
-            pyautogui.press("volumemute")
-            return "Volume muted/unmuted"
-        else:
-            return f"System task {task} executed"
-
-    # content generation
-    elif command_text.startswith("content"):
-        topic = c.replace("content", "", 1).strip()
-        from backend.chat_bot import ChatBot
-        content = ChatBot(f"Write a professional response/content about: {topic}")
-        desktop = os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop")
-        if not os.path.exists(desktop):
-            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-        os.makedirs(desktop, exist_ok=True)
-        file_path = os.path.join(desktop, "generated_content.txt")
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        subprocess.Popen(["notepad.exe", file_path])
-        return "Content generated and opened in Notepad"
-
-    # reminder automation
-    elif command_text.startswith("reminder"):
-        import re
-        time_match = re.search(r'\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b', command_text)
-        if time_match:
-            time_input = time_match.group(1)
-            task = c.replace(time_input, "")
-            task = re.sub(r'\breminder\b', '', task, flags=re.IGNORECASE)
-            task = re.sub(r'\b(?:on\s+)?\d+(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b', '', task, flags=re.IGNORECASE)
-            task = task.strip()
-            if not task:
-                task = "Reminder"
-            
-            global reminder_thread_started
-            if not reminder_thread_started:
-                start_reminder_thread()
-                reminder_thread_started = True
-            
-            result = save_reminder(task, time_input)
-            return result
-        else:
-            return "Could not find a valid time for the reminder"
-
-    # battery status
-    elif "battery status" in command_text:
-        result = battery_alert()
-        if result:
-            return result
-        return "Battery status checked"
-
-    # internet status
-    elif "internet status" in command_text:
-        result = internet_status()
-        if result:
-            return result
-        return "Internet status checked"
-
-    # system stats
-    elif "check system" in command_text:
-        stats = get_system_stats()
-        return stats
-
-    # take screenshot
-    elif "take a screenshot" in command_text:
-        result = take_screenshot()
-        return result
-
-    # weather
-    elif "weather" in command_text:
-        result = get_weather()
-        return result
-
-    # news headlines spoken
-    elif "news" in command_text:
-        newsapi = GNewsAPIKey
-        url = f"https://gnews.io/api/v4/top-headlines?category=general&lang=en&apikey={newsapi}"
-        try:
-            response = requests.get(url)
-            data = response.json()
-            articles = data.get("articles", [])
-
-            if not articles:
-                speak("No news available")
-                return "No news available"
-
-            headlines = [article.get("title", "") for article in articles]
-            for i, title in enumerate(headlines, 1):
-                speak(f"{i}. {title}")
-
-            return "News headlines spoken"
-        except Exception as e:
-            print("News Error:", e)
-            return "Unable to speak news"
-
-    # send message on whatsapp
-    elif "send message on whatsapp" in command_text:
-        from backend.speech_to_text import listen
-        speak("Whom should I send the message to?")
-        receiver = listen()
-
-        speak("What is the message?")
-        message = listen()
-
-        if receiver and message:
-            result = send_whatsapp_instant(receiver, message)
-            return result
-
-        return "WhatsApp message canceled"
-
-    # exit command
-    elif "exit" in command_text:
-        return "exit"
-
-    else:
-        return None
 
 
 # ==========================================
@@ -970,3 +786,189 @@ async def Automation(commands: list[str]):
         pass
     
     return True  # Indicate success.
+
+
+# ==========================================
+# Command Processing / Automation Router
+# ==========================================
+def process_automation(c):
+    if not c or not isinstance(c, str):
+        return None
+
+    command_text = c.strip().lower()
+    if not command_text:
+        return None
+
+    # close tab or general close app
+    if "close it" in command_text:
+        import pyautogui
+        import time
+        time.sleep(0.5)
+        pyautogui.hotkey('alt', 'f4')
+        return "Closing tab"
+        
+    elif command_text.startswith("close"):
+        app_name = command_text.replace("close", "").strip()
+        from AppOpener import close as appclose
+        try:
+            appclose(app_name, match_closest=True, throw_error=True)
+            return f"Closing {app_name}"
+        except:
+            import pyautogui
+            pyautogui.hotkey('alt', 'f4')
+            return f"Attempted to close {app_name}"
+
+    # open website or app
+    elif command_text.startswith("open"):
+        result = open_app(c)
+        return result
+
+    # google search
+    elif command_text.startswith("google search"):
+        query = c.replace("google search", "", 1).strip()
+        if query:
+            url = f"https://www.google.com/search?q={quote(query)}"
+            webbrowser.open(url)
+            return f"Searching Google for {query}"
+        else:
+            return "What should I search for on Google?"
+
+    # youtube search
+    elif command_text.startswith("youtube search"):
+        query = c.replace("youtube search", "", 1).strip()
+        if query:
+            url = f"https://www.youtube.com/results?search_query={quote(query)}"
+            webbrowser.open(url)
+            return f"Searching YouTube for {query}"
+        else:
+            return "What should I search for on YouTube?"
+
+    # general search
+    elif command_text.startswith("search"):
+        query = command_text.replace("search", "").strip()
+        if query:
+            url = f"https://www.google.com/search?q={quote(query)}"
+            webbrowser.open(url)
+            return f"Searching for {query}"
+        else:
+            return "What should I search for?"
+
+    # run application
+    elif command_text.startswith("run"):
+        result = open_app(c)
+        return result
+
+    # play song on youtube
+    elif command_text.startswith("play"):
+        song = c.replace("play", "", 1).strip()
+        result = play_music_on_youtube(song)
+        return result
+
+    # system control tasks
+    elif command_text.startswith("system"):
+        task = command_text.replace("system", "").strip()
+        import pyautogui
+        if "volume up" in task:
+            pyautogui.press("volumeup")
+            return "Volume increased"
+        elif "volume down" in task:
+            pyautogui.press("volumedown")
+            return "Volume decreased"
+        elif "mute" in task or "unmute" in task:
+            pyautogui.press("volumemute")
+            return "Volume muted/unmuted"
+        else:
+            return f"System task {task} executed"
+
+    # content generation
+    elif command_text.startswith("content"):
+        topic = c.replace("content", "", 1).strip()
+        from backend.chat_bot import ChatBot
+        content = ChatBot(f"Write a professional response/content about: {topic}")
+        desktop = os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop")
+        if not os.path.exists(desktop):
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+        os.makedirs(desktop, exist_ok=True)
+        file_path = os.path.join(desktop, "generated_content.txt")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        subprocess.Popen(["notepad.exe", file_path])
+        return "Content generated and opened in Notepad"
+
+    # reminder automation
+    elif command_text.startswith("reminder"):
+        import re
+        time_match = re.search(r'\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b', command_text)
+        if time_match:
+            time_input = time_match.group(1)
+            task = c.replace(time_input, "")
+            task = re.sub(r'\breminder\b', '', task, flags=re.IGNORECASE)
+            task = re.sub(r'\b(?:on\s+)?\d+(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b', '', task, flags=re.IGNORECASE)
+            task = task.strip()
+            if not task:
+                task = "Reminder"
+            
+            global reminder_thread_started
+            if not reminder_thread_started:
+                start_reminder_thread()
+                reminder_thread_started = True
+            
+            result = save_reminder(task, time_input)
+            return result
+        else:
+            return "Could not find a valid time for the reminder"
+
+    # battery status
+    elif "battery status" in command_text:
+        result = battery_alert()
+        if result:
+            return result
+        return "Battery status checked"
+
+    # internet status
+    elif "internet status" in command_text:
+        result = internet_status()
+        if result:
+            return result
+        return "Internet status checked"
+
+    # system stats
+    elif "check system" in command_text:
+        stats = get_system_stats()
+        return stats
+
+    # take screenshot
+    elif "take a screenshot" in command_text:
+        result = take_screenshot()
+        return result
+
+    # weather
+    elif "weather" in command_text:
+        result = get_weather()
+        return result
+
+    # news headlines spoken
+    elif "news" in command_text:
+        return get_news()
+
+    # send message on whatsapp
+    elif "send message on whatsapp" in command_text:
+        from backend.speech_to_text import listen
+        speak("Whom should I send the message to?")
+        receiver = listen()
+
+        speak("What is the message?")
+        message = listen()
+
+        if receiver and message:
+            result = send_whatsapp_instant(receiver, message)
+            return result
+
+        return "WhatsApp message canceled"
+
+    # exit command
+    elif "exit" in command_text:
+        return "exit"
+
+    else:
+        return None

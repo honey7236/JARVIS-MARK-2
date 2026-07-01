@@ -1,11 +1,7 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from dotenv import dotenv_values
+import speech_recognition as sr
 import os
 import mtranslate as mt
+from dotenv import dotenv_values
 import time
 
 # Load environment variables from the .env file.
@@ -13,84 +9,49 @@ env_vars = dotenv_values(".env")
 # Get the input language setting from the environment variables.
 InputLanguage = env_vars.get("InputLanguage") or "en"
 
-# Define the HTML code for the speech recognition interface.
-HtmlCode = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Speech Recognition</title>
-</head>
-<body>
-    <button id="start" onclick="startRecognition()">Start Recognition</button>
-    <button id="end" onclick="stopRecognition()">Stop Recognition</button>
-    <p id="output"></p>
-    <script>
-        const output = document.getElementById('output');
-        let recognition;
+# Initialize speech recognizer
+recognizer = sr.Recognizer()
 
-        function startRecognition() {
-            recognition = new webkitSpeechRecognition() || new SpeechRecognition();
-            recognition.lang = '';
-            recognition.continuous = true;
+# Optimize sensitivity and noise thresholds
+recognizer.energy_threshold = 600      # Initial threshold slightly higher for static protection
+recognizer.dynamic_energy_threshold = True  # Dynamically adapt to room noise levels
+recognizer.dynamic_energy_adjustment_damping = 0.15
+recognizer.dynamic_energy_ratio = 1.5
 
-            recognition.onresult = function(event) {
-                const transcript = event.results[event.results.length - 1][0].transcript;
-                output.textContent += transcript;
-            };
-
-            recognition.onend = function() {
-                recognition.start();
-            };
-            recognition.start();
-        }
-
-        function stopRecognition() {
-            recognition.stop();
-            output.innerHTML = "";
-        }
-    </script>
-</body>
-</html>'''
-
-# Replace the language setting in the HTML code with the input language from the environment variables.
-HtmlCode = str(HtmlCode).replace("recognition.lang = '';", f"recognition.lang = '{InputLanguage}';")
-
-# Write the modified HTML code to a file.
-os.makedirs("Data", exist_ok=True)
-with open(r"Data\Voice.html", "w") as f:
-    f.write(HtmlCode)
-    
-# Get the current working directory.
+# Set path for assistant status telemetry files
 current_dir = os.getcwd()
-# Generate the file path for the HTML file.
-Link = f"{current_dir}/Data/Voice.html"
-
-# Set Chrome options for the WebDriver.
-chrome_options = Options()
-user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.142.86 Safari/537.36"
-chrome_options.add_argument(f'user-agent={user_agent}')
-chrome_options.add_argument("--use-fake-ui-for-media-stream")
-chrome_options.add_argument("--use-fake-device-for-media-stream")
-chrome_options.add_argument("--headless=new")
-chrome_options.add_argument("--log-level=3")  # Suppress Chrome log spam
-chrome_options.add_argument("--silent")  # Quiet mode
-chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])  # Silence USB/Bluetooth warnings on Windows
-# Initialize the Chrome WebDriver using the ChromeDriverManager.
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service, options=chrome_options)
-
-# Define the path for temporary files.
 TempDirPath = rf"{current_dir}/Frontend/Files"
 os.makedirs(TempDirPath, exist_ok=True)
 
-# Function to set the assistant's status by writing it to a file.
+# Calibrate microphone for ambient noise floor once on startup
+print("[SpeechToText] Calibrating microphone for ambient noise floor...")
+try:
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source, duration=1.0)
+    print(f"[SpeechToText] Calibration complete. Energy threshold set to: {recognizer.energy_threshold}")
+except Exception as e:
+    print(f"[SpeechToText] Microphone calibration skipped: {e}")
+
+# Function to set the assistant's status by writing it to a file and updating Eel.
 def SetAssistantStatus(Status):
-    with open(rf'{TempDirPath}/Status.data', "w", encoding='utf-8') as file:
-        file.write(Status)
-        
+    try:
+        with open(rf'{TempDirPath}/Status.data', "w", encoding='utf-8') as file:
+            file.write(Status)
+    except Exception:
+        pass
+
+    try:
+        import eel
+        eel.updateStatus(Status)
+    except Exception:
+        pass
+
 # Function to modify a query to ensure proper punctuation and formatting.
 def QueryModifier(Query):
     new_query = Query.lower().strip()
     query_words = new_query.split()
+    if not query_words:
+        return ""
     question_words = ["how", "what", "who", "where", "when", "why", "which", "whose", "whom", "can you", "what's", "where's", "how's", "can you"]
     
     # Check if the query is a question and add a question mark if necessary.
@@ -113,42 +74,56 @@ def UniversalTranslator(Text):
     english_translation = mt.translate(Text, 'en', "auto")
     return english_translation.capitalize()
 
-# Function to perform speech recognition using the WebDriver.
+# Function to perform speech recognition using the microphone.
 def listen():
-    # Open the HTML file in the browser.
-    driver.get("file:///" + Link)
-    # Start speech recognition by clicking the "Start" button.
-    driver.find_element(by=By.ID, value="start").click()
+    SetAssistantStatus("Listening...")
     
-    while True:
+    # Map input language to standard locale strings
+    recognize_language = InputLanguage
+    if recognize_language == "en":
+        recognize_language = "en-IN"
+    elif recognize_language == "hi":
+        recognize_language = "hi-IN"
+
+    with sr.Microphone() as source:
         try:
-            # Get the recognized text from the HTML output element.
-            Text = driver.find_element(by=By.ID, value="output").text
-            
-            if Text:
-                # Stop recognition by clicking the "Stop" button.
-                driver.find_element(by=By.ID, value="end").click()
-                
-                # If the input language is English, return the modified query.
-                if InputLanguage.lower() == "en" or "en" in InputLanguage.lower():
-                    return QueryModifier(Text)
-                else:
-                    # If the input language is not English, translate the text and return it.
-                    SetAssistantStatus("Translating...")
-                    try:
-                        return QueryModifier(UniversalTranslator(Text))
-                    except Exception as trans_err:
-                        print(f"Translation network error: {trans_err}")
-                        return QueryModifier(Text)
-                
-        except Exception as e:
-            pass
-            
-        time.sleep(0.2)  # Prevent 100% CPU spinning while waiting for voice input
+            # Capture speech natively without timing out (blocks until input is detected)
+            audio = recognizer.listen(source)
+        except Exception as mic_err:
+            print(f"[SpeechToText] Microphone listen error: {mic_err}")
+            SetAssistantStatus("Active")
+            time.sleep(1.0)  # Sleep on hardware/mic errors to prevent busy-looping
+            return ""
+
+    SetAssistantStatus("Thinking...")
+    try:
+        # Recognize speech using Google Web Speech API
+        text = recognizer.recognize_google(audio, language=recognize_language)
+        print("You:", text)
         
+        if not text:
+            SetAssistantStatus("Active")
+            return ""
+            
+        # If the input language is English, return the modified query.
+        if InputLanguage.lower() == "en" or "en" in InputLanguage.lower():
+            return QueryModifier(text)
+        else:
+            # If the input language is not English, translate the text and return it.
+            SetAssistantStatus("Translating...")
+            try:
+                return QueryModifier(UniversalTranslator(text))
+            except Exception as trans_err:
+                print(f"Translation network error: {trans_err}")
+                return QueryModifier(text)
+                
+    except Exception:
+        SetAssistantStatus("Active")
+        time.sleep(0.2)  # Short cooldown on recognition failures
+        return ""
+
 # Main Execution Block.
 if __name__ == "__main__":
     while True:
         # Continuously perform speech recognition and print the recognized text.
         Text = listen()
-        print(Text)

@@ -1,3 +1,4 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import unquote, quote
@@ -29,6 +30,7 @@ System = f"""Hello, I am {Username}, You are a very accurate and advanced AI cha
 
 # Try to load the chat log from a JSON file, or create an empty one if it doesn't exist.
 messages = []
+os.makedirs("Data", exist_ok=True)
 try:
     with open(r"Data\ChatLog.json", "r") as f:
         messages = load(f)
@@ -49,33 +51,121 @@ def GoogleSearch(query):
     }
     results = []
     
-    # Try 1: DuckDuckGo Lite
+    # STAGE 1: DuckDuckGo HTML (Very standard, highly reliable)
     try:
-        url = "https://lite.duckduckgo.com/lite/"
+        url = "https://html.duckduckgo.com/html/"
         resp = requests.post(url, headers=headers, data={"q": query}, timeout=6)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, "html.parser")
-            links = soup.find_all("a", class_="result-link")
-            for link in links:
-                title = link.text.strip()
-                href = link.get("href")
-                
-                snippet = ""
-                parent_tr = link.find_parent("tr")
-                if parent_tr:
-                    next_tr = parent_tr.find_next_sibling("tr")
-                    if next_tr:
-                        snippet_td = next_tr.find("td", class_="result-snippet")
-                        if snippet_td:
-                            snippet = snippet_td.text.strip()
-                
-                results.append(SearchResult(title, snippet, href))
-                if len(results) >= 5:
-                    break
-    except Exception:
-        pass
+            items = soup.select("#links .result")
+            for item in items:
+                title_el = item.select_one(".result__a")
+                snippet_el = item.select_one(".result__snippet")
+                if title_el:
+                    title = title_el.get_text(strip=True)
+                    href = title_el.get("href")
+                    
+                    # Clean redirect wrapper
+                    if "/l/?uddg=" in href:
+                        href = href.split("uddg=")[1].split("&")[0]
+                        href = unquote(href)
+                    elif href.startswith("//"):
+                        href = "https:" + href
+                        
+                    snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+                    results.append(SearchResult(title, snippet, href))
+                    if len(results) >= 5:
+                        break
+    except Exception as e:
+        print(f"[SearchEngine] DuckDuckGo HTML POST failed: {e}")
 
-    # Try 2: Mojeek (Robust Fallback)
+    # STAGE 1b: DuckDuckGo HTML via GET (as fallback to POST)
+    if not results:
+        try:
+            url = f"https://html.duckduckgo.com/html/?q={quote(query)}"
+            resp = requests.get(url, headers=headers, timeout=6)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                items = soup.select("#links .result")
+                for item in items:
+                    title_el = item.select_one(".result__a")
+                    snippet_el = item.select_one(".result__snippet")
+                    if title_el:
+                        title = title_el.get_text(strip=True)
+                        href = title_el.get("href")
+                        if "/l/?uddg=" in href:
+                            href = href.split("uddg=")[1].split("&")[0]
+                            href = unquote(href)
+                        elif href.startswith("//"):
+                            href = "https:" + href
+                        snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+                        results.append(SearchResult(title, snippet, href))
+                        if len(results) >= 5:
+                            break
+        except Exception as e:
+            print(f"[SearchEngine] DuckDuckGo HTML GET failed: {e}")
+
+    # STAGE 2: DuckDuckGo Lite (POST request)
+    if not results:
+        try:
+            url = "https://lite.duckduckgo.com/lite/"
+            resp = requests.post(url, headers=headers, data={"q": query}, timeout=6)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                
+                # Check for standard result-link classes first
+                links = soup.find_all("a", class_="result-link")
+                for link in links:
+                    title = link.text.strip()
+                    href = link.get("href")
+                    
+                    snippet = ""
+                    parent_tr = link.find_parent("tr")
+                    if parent_tr:
+                        next_tr = parent_tr.find_next_sibling("tr")
+                        if next_tr:
+                            snippet_td = next_tr.find("td", class_="result-snippet")
+                            if snippet_td:
+                                snippet = snippet_td.text.strip()
+                    
+                    if "/l/?uddg=" in href:
+                        href = href.split("uddg=")[1].split("&")[0]
+                        href = unquote(href)
+                    
+                    results.append(SearchResult(title, snippet, href))
+                    if len(results) >= 5:
+                        break
+                        
+                # Fallback to tag-based scraping if classes changed
+                if not results:
+                    all_links = soup.find_all("a", href=True)
+                    for link in all_links:
+                        href = link["href"]
+                        if "duckduckgo.com" in href and not "/l/?uddg=" in href:
+                            continue
+                        if href.startswith("/") and not href.startswith("//") and not href.startswith("/l/?uddg="):
+                            continue
+                        title = link.text.strip()
+                        if not title or len(title) < 3:
+                            continue
+                        if "/l/?uddg=" in href:
+                            href = href.split("uddg=")[1].split("&")[0]
+                            href = unquote(href)
+                        
+                        snippet = ""
+                        parent_tr = link.find_parent("tr")
+                        if parent_tr:
+                            next_tr = parent_tr.find_next_sibling("tr")
+                            if next_tr:
+                                snippet = next_tr.text.strip()
+                        
+                        results.append(SearchResult(title, snippet, href))
+                        if len(results) >= 5:
+                            break
+        except Exception as e:
+            print(f"[SearchEngine] DuckDuckGo Lite failed: {e}")
+
+    # STAGE 3: Mojeek (Robust Fallback)
     if not results:
         try:
             url = f"https://www.mojeek.com/search?q={quote(query)}"
@@ -84,14 +174,15 @@ def GoogleSearch(query):
                 soup = BeautifulSoup(resp.text, "html.parser")
                 li_items = soup.find_all("li")
                 for li in li_items:
-                    title_a = li.find("a", class_="title")
+                    title_a = li.find("a", class_="title") or li.find("a")
                     if title_a:
                         title = title_a.text.strip()
                         href = title_a.get("href")
+                        if not href or href.startswith("/") or "mojeek.com" in href:
+                            continue
                         
-                        snippet_p = li.find("p", class_="s")
+                        snippet_p = li.find("p", class_="s") or li.find("p")
                         snippet = snippet_p.text.strip() if snippet_p else ""
-                        
                         if snippet_p and snippet_p.find("span", class_="url"):
                             url_span = snippet_p.find("span", class_="url")
                             snippet = snippet.replace(url_span.text, "").strip()
@@ -99,12 +190,45 @@ def GoogleSearch(query):
                         results.append(SearchResult(title, snippet, href))
                         if len(results) >= 5:
                             break
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[SearchEngine] Mojeek failed: {e}")
+
+    # STAGE 4: Google Mobile Search (Ultimate Fail-Safe)
+    if not results:
+        try:
+            url = f"https://www.google.com/search?q={quote(query)}"
+            google_headers = {
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+            }
+            resp = requests.get(url, headers=google_headers, timeout=6)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                divs = soup.find_all("div", class_="xpd") or soup.find_all("div", class_="g")
+                for div in divs:
+                    a_tag = div.find("a", href=True)
+                    if a_tag:
+                        href = a_tag["href"]
+                        if href.startswith("/url?q="):
+                            href = href.split("/url?q=")[1].split("&")[0]
+                            href = unquote(href)
+                        elif href.startswith("/"):
+                            continue
+                        
+                        h3 = div.find("h3")
+                        title = h3.get_text(strip=True) if h3 else (a_tag.get_text(strip=True) or "Search Result")
+                        
+                        snippet_div = div.find(class_="BNeawe") or div.find(class_="VwiC3b")
+                        snippet = snippet_div.get_text(strip=True) if snippet_div else ""
+                        
+                        results.append(SearchResult(title, snippet, href))
+                        if len(results) >= 5:
+                            break
+        except Exception as e:
+            print(f"[SearchEngine] Google Mobile fallback failed: {e}")
 
     Answer = f"The Search results for '{query}' are:\n[start]\n"
     for i in results:
-        Answer += f"Title: {i.title}\nDescription: {i.description}\n\n"
+        Answer += f"Title: {i.title}\nDescription: {i.description}\nLink: {i.url}\n\n"
     Answer += "[end]"
     return Answer
 
@@ -119,7 +243,7 @@ def AnswerModifier(Answer):
 SystemChatBot = [
     {"role": "system", "content": System},
     {"role": "user", "content": "Hi"},
-    {"role": "assistant", "content": "Hello Mukund! Sir. How can I help you?"},
+    {"role": "assistant", "content": f"Hello {Username}! Sir. How can I help you?"},
 ]
 
 # Function to get the real-time information like the current date and time.
@@ -144,10 +268,15 @@ def Information():
 # Function to handle real-time search and response generation.
 def RealtimeSearchEngine(prompt):
     global messages
+    if not prompt or not prompt.strip():
+        return "I didn't catch that, could you please repeat?"
     
     # Load the chat log from the JSON file.
-    with open(r"Data\ChatLog.json", "r") as f:
-        messages = load(f)
+    try:
+        with open(r"Data\ChatLog.json", "r") as f:
+            messages = load(f)
+    except Exception:
+        messages = []
     messages.append({"role": "user", "content": f"{prompt}"})
     
     # Combine system prompt, search results, and real-time info without mutating global state.

@@ -98,11 +98,12 @@ while True:
         # If the status indicates an image generation request
         if Status == "True":
             print("Generating Images...")
-            ImageStatus = GenerateImages(prompt=Prompt)
-            
-            # Reset the status in the data file after generating images
-            with open(r"Frontend\Files\ImageGeneration.data", "w") as f:
-                f.write("False,False")
+            try:
+                GenerateImages(prompt=Prompt)
+            finally:
+                # Reset the status in the data file after generating images
+                with open(r"Frontend\Files\ImageGeneration.data", "w") as f:
+                    f.write("False,False")
             break  # Exit the loop after processing the request.
             
         else:

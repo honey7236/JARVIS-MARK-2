@@ -20,7 +20,16 @@ eel.init(resource_path("frontend"))
 @eel.expose
 def get_network_status():
     from backend.automation import get_cached_status
-    return get_cached_status()
+    try:
+        return get_cached_status()
+    except Exception as e:
+        print("Error getting network status:", e)
+        return {
+            "status": "Offline",
+            "ping": "N/A",
+            "download": "N/A",
+            "upload": "N/A"
+        }
 
 @eel.expose
 def display_weather_data():
@@ -54,35 +63,14 @@ def get_system_data():
 def display_system_info_data():
     return get_system_data()
 
-@eel.expose
-def get_last_session_messages():
-    try:
-        from data.short_term import FILE
-        import json
-        if os.path.exists(FILE):
-            with open(FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        print("Error getting last session messages:", e)
-    return []
-
-# Contact management APIs
+# Contact management
 from data.contact_data import contacts
 import json
 
 CONTACTS_JSON_FILE = "data/contacts.json"
 
-def save_contacts_to_file():
-    os.makedirs("data", exist_ok=True)
-    try:
-        with open(CONTACTS_JSON_FILE, "w", encoding="utf-8") as f:
-            json.dump(contacts, f, indent=4)
-    except Exception as e:
-        print("Error saving contacts.json:", e)
-
 def load_contacts():
     os.makedirs("data", exist_ok=True)
-    os.makedirs("memory", exist_ok=True)
     if os.path.exists(CONTACTS_JSON_FILE):
         try:
             with open(CONTACTS_JSON_FILE, "r", encoding="utf-8") as f:
@@ -91,42 +79,8 @@ def load_contacts():
                 contacts.update(loaded)
         except Exception as e:
             print("Error loading contacts.json:", e)
-    else:
-        save_contacts_to_file()
 
 load_contacts()
-
-@eel.expose
-def get_contacts():
-    return contacts
-
-@eel.expose
-def save_contact(name, phone):
-    try:
-        if not name or not phone:
-            return {"success": False, "error": "Name and phone number cannot be empty."}
-        
-        name_lower = name.strip().lower()
-        phone_clean = phone.strip()
-        
-        contacts[name_lower] = phone_clean
-        save_contacts_to_file()
-        return {"success": True, "contacts": contacts}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@eel.expose
-def delete_contact(name):
-    try:
-        name_lower = name.strip().lower()
-        if name_lower in contacts:
-            del contacts[name_lower]
-            save_contacts_to_file()
-            return {"success": True, "contacts": contacts}
-        else:
-            return {"success": False, "error": "Contact not found."}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 
 @eel.expose

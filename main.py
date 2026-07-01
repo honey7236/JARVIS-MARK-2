@@ -39,8 +39,12 @@ def QueryModifier(Query):
     return new_query.capitalize()
 
 
+# Global state to track state transition print
+last_print_was_listening = False
+
 # Main Execution
 def MainExecution():
+    global last_print_was_listening
     try:
         SetAssistantStatus("Listening...")
         try:
@@ -49,10 +53,13 @@ def MainExecution():
             ImageExecution = False
             ImageGenerationQuery = ""
             
-            print("Listening...")
+            if not last_print_was_listening:
+                print("Listening...")
+                last_print_was_listening = True
             Query = listen()
             if not Query:
                 return False
+            last_print_was_listening = False
             print(f"{Username} : {Query}")
                 
             print("Thinking...")
@@ -136,7 +143,8 @@ def MainExecution():
             print(f"Network connection error in MainExecution: {e}. Retrying in 5 seconds...")
             sleep(5)
         else:
-            print(f"Error in MainExecution: {e}")
+            print(f"Error in MainExecution: {e}. Retrying in 2 seconds...")
+            sleep(2)
         return False
             
 if __name__ == "__main__":

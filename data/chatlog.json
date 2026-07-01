@@ -6,5 +6,37 @@
     {
         "role": "assistant",
         "content": "I'm awake and ready to assist you. What can I do for you?"
+    },
+    {
+        "role": "user",
+        "content": "Hijab is wake up."
+    },
+    {
+        "role": "assistant",
+        "content": "Good morning, I'm here and ready to help."
+    },
+    {
+        "role": "user",
+        "content": "Recharge pickup."
+    },
+    {
+        "role": "assistant",
+        "content": "Your recharge is being picked up, please provide the order details."
+    },
+    {
+        "role": "user",
+        "content": "Generator image of iron."
+    },
+    {
+        "role": "assistant",
+        "content": "I can generate an image of iron, it's a metal element with a silvery-white color and a shiny appearance."
+    },
+    {
+        "role": "user",
+        "content": "Which always how are you?"
+    },
+    {
+        "role": "assistant",
+        "content": "I'm functioning properly and ready to assist you."
     }
 ]

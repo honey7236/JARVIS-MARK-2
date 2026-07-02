@@ -1,42 +1,44 @@
+import datetime
+import logging
+import backend.data_manager as data_manager
 import os
-import requests
+from urllib.parse import quote, unquote
+
 from bs4 import BeautifulSoup
-from urllib.parse import unquote, quote
+import backend.config_manager as config_manager
+import requests
+
 try:
     from backend.groq_client import Groq
 except ImportError:
     from groq_client import Groq
-from json import load, dump # Importing functions to read and write JSON files.
-import datetime # Importing the datetime module for real-time date and time information.
-from dotenv import dotenv_values  # Importing dotenv_values to read environment variables from a .env file.
 
-# Load environment variables from the .env file.
-env_vars = dotenv_values(".env")
+try:
+    from backend.chat_bot import RealtimeInformation, AnswerModifier
+except ImportError:
+    from chat_bot import RealtimeInformation, AnswerModifier
 
-# Retrieve environment variables for the chatbot configuration.
-Username = env_vars.get("Username")
-Assistantname = env_vars.get("Assistantname")
-GroqAPIKey = env_vars.get("GroqAPIKey")
+# Initialize logger
+logger = logging.getLogger(__name__)
+
+# Retrieve settings via Config Manager.
+Username = config_manager.get_setting("Username", "User")
+Assistantname = config_manager.get_setting("Assistantname", "JARVIS")
+groq_keys = config_manager.get_groq_api_keys()
+GroqAPIKey = groq_keys[0] if groq_keys else None
 
 # Initialize the Groq client with the provided API Key.
 client = Groq(api_key=GroqAPIKey)
 
-#Define the system instructions for the chatbot.
+# Define the system instructions for the chatbot.
 System = f"""Hello, I am {Username}, You are a very accurate and advanced AI chatbot named {Assistantname} which has real-time up-to-date information from the internet.
 *** Provide Answers In a Professional Way, make sure to add full stops, commas, question marks, and use proper grammar.***
 *** Just answer the question from the provided data in a professional way. ***
 *** Keep the answer clean, very short, and highly accurate. Summarize the answer in 2-3 concise, direct sentences. ***
 *** Avoid bullet points, lists, introductory phrases (such as "According to the search results..."), and conversational filler. Just state the facts directly. ***"""
 
-# Try to load the chat log from a JSON file, or create an empty one if it doesn't exist.
-messages = []
-os.makedirs("Data", exist_ok=True)
-try:
-    with open(r"Data\ChatLog.json", "r") as f:
-        messages = load(f)
-except Exception:
-    with open(r"Data\ChatLog.json", "w") as f:
-        dump([], f)
+# Path to the chat log JSON file.
+chat_log_path = os.path.join("data", "chatlog.json")
 
 class SearchResult:
     def __init__(self, title, description, url):
@@ -77,7 +79,7 @@ def GoogleSearch(query):
                     if len(results) >= 5:
                         break
     except Exception as e:
-        print(f"[SearchEngine] DuckDuckGo HTML POST failed: {e}")
+        logger.error(f"[SearchEngine] DuckDuckGo HTML POST failed: {e}", exc_info=True)
 
     # STAGE 1b: DuckDuckGo HTML via GET (as fallback to POST)
     if not results:
@@ -103,7 +105,7 @@ def GoogleSearch(query):
                         if len(results) >= 5:
                             break
         except Exception as e:
-            print(f"[SearchEngine] DuckDuckGo HTML GET failed: {e}")
+            logger.error(f"[SearchEngine] DuckDuckGo HTML GET failed: {e}", exc_info=True)
 
     # STAGE 2: DuckDuckGo Lite (POST request)
     if not results:
@@ -163,7 +165,7 @@ def GoogleSearch(query):
                         if len(results) >= 5:
                             break
         except Exception as e:
-            print(f"[SearchEngine] DuckDuckGo Lite failed: {e}")
+            logger.error(f"[SearchEngine] DuckDuckGo Lite failed: {e}", exc_info=True)
 
     # STAGE 3: Mojeek (Robust Fallback)
     if not results:
@@ -191,7 +193,7 @@ def GoogleSearch(query):
                         if len(results) >= 5:
                             break
         except Exception as e:
-            print(f"[SearchEngine] Mojeek failed: {e}")
+            logger.error(f"[SearchEngine] Mojeek failed: {e}", exc_info=True)
 
     # STAGE 4: Google Mobile Search (Ultimate Fail-Safe)
     if not results:
@@ -224,20 +226,13 @@ def GoogleSearch(query):
                         if len(results) >= 5:
                             break
         except Exception as e:
-            print(f"[SearchEngine] Google Mobile fallback failed: {e}")
+            logger.error(f"[SearchEngine] Google Mobile fallback failed: {e}", exc_info=True)
 
     Answer = f"The Search results for '{query}' are:\n[start]\n"
     for i in results:
         Answer += f"Title: {i.title}\nDescription: {i.description}\nLink: {i.url}\n\n"
     Answer += "[end]"
     return Answer
-
-# Function to clean up the answer by removing empty lines.
-def AnswerModifier(Answer):
-    lines = Answer.split('\n')  # Split the response into lines.
-    non_empty_lines = [line for line in lines if line.strip()]  # Remove empty lines.
-    modified_answer = '\n'.join(non_empty_lines)  # Join the cleaned lines back together.
-    return modified_answer
 
 # Predefined chatbot conversation system message and an initial user messages.
 SystemChatBot = [
@@ -246,24 +241,8 @@ SystemChatBot = [
     {"role": "assistant", "content": f"Hello {Username}! Sir. How can I help you?"},
 ]
 
-# Function to get the real-time information like the current date and time.
-def Information():
-    data = ""
-    current_date_time = datetime.datetime.now()
-    day = current_date_time.strftime("%A")
-    date = current_date_time.strftime("%d")
-    month = current_date_time.strftime("%B")
-    year = current_date_time.strftime("%Y")
-    hour = current_date_time.strftime("%H")
-    minute = current_date_time.strftime("%M")        
-    second = current_date_time.strftime("%S")
-    data += f"Use This Real-time Information if needed: \n"
-    data += f"Day: {day}\n"
-    data += f"Date: {date}\n"
-    data += f"Month: {month}\n"
-    data += f"Year: {year}\n"
-    data += f"Time: {hour} hours, {minute} minutes, {second} seconds.\n"
-    return data
+# Alias RealtimeInformation for backward compatibility
+Information = RealtimeInformation
 
 # Function to handle real-time search and response generation.
 def RealtimeSearchEngine(prompt):
@@ -272,11 +251,7 @@ def RealtimeSearchEngine(prompt):
         return "I didn't catch that, could you please repeat?"
     
     # Load the chat log from the JSON file.
-    try:
-        with open(r"Data\ChatLog.json", "r") as f:
-            messages = load(f)
-    except Exception:
-        messages = []
+    messages = data_manager.load_json(chat_log_path, default=[])
     messages.append({"role": "user", "content": f"{prompt}"})
     
     # Combine system prompt, search results, and real-time info without mutating global state.
@@ -288,7 +263,7 @@ def RealtimeSearchEngine(prompt):
         + messages
     )
     
-    # Genrate a response using the Groq client.
+    # Generate a response using the Groq client.
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages_to_send,
@@ -311,8 +286,7 @@ def RealtimeSearchEngine(prompt):
     messages.append({"role": "assistant", "content": Answer})
     
     # Save the updated chat log back to the JSON file.
-    with open(r"Data\ChatLog.json", "w") as f:
-        dump(messages, f, indent=4)
+    data_manager.save_json(chat_log_path, messages)
         
     return AnswerModifier(Answer=Answer)
 

@@ -1,54 +1,47 @@
+import logging
+import os
+import sys
+import threading
+from time import sleep
+
+import backend.config_manager as config_manager
+import backend.data_manager as data_manager
+
+from backend.automation import process_automation
+from backend.chat_bot import ChatBot
 from backend.command_manager import FirstLayerDMM
 from backend.realtime_search_engine import RealtimeSearchEngine
-from backend.automation import process_automation
-from backend.speech_to_text import listen, SetAssistantStatus
-from backend.chat_bot import ChatBot
+from backend.speech_to_text import listen, SetAssistantStatus, QueryModifier
 from backend.text_to_speech import speak
-from dotenv import dotenv_values
-from time import sleep
-import sys
-import subprocess
-import os
 
-env_vars = dotenv_values(".env")
-Username = env_vars.get("Username")
-Assistantname = env_vars.get("Assistantname")
-subprocesses = []
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+def resource_path(path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, path)
+
+Username = config_manager.get_setting("Username", "User")
+Assistantname = config_manager.get_setting("Assistantname", "JARVIS")
 Functions = ["open", "close", "play", "system", "content", "google search", "youtube search", "reminder", "weather", "news"]
-
-def QueryModifier(Query):
-    new_query = Query.lower().strip()
-    query_words = new_query.split()
-    if not query_words:
-        return ""
-    question_words = ["how", "what", "who", "where", "when", "why", "which", "whose", "whom", "can you", "what's", "where's", "how's"]
-    
-    # Check if the query is a question and add a question mark if necessary.
-    if any(word + " " in new_query for word in question_words):
-        if query_words[-1][-1] in ['.', '?', '!']:
-            new_query = new_query[:-1] + "?"
-        else:
-            new_query += "?"
-    else:
-        # Add a period if the query is not a question.
-        if query_words[-1][-1] in ['.', '?', '!']:
-            new_query = new_query[:-1] + "."
-        else:
-            new_query += "."
-
-    return new_query.capitalize()
 
 
 # Global state to track state transition print
 last_print_was_listening = False
 
-# Main Execution
 def MainExecution():
     global last_print_was_listening
     try:
         SetAssistantStatus("Listening...")
         try:
-            # speak("initializing jarvis. i am listening sir...")
             TaskExecution = False
             ImageExecution = False
             ImageGenerationQuery = ""
@@ -77,8 +70,8 @@ def MainExecution():
             
             for queries in Decision:
                 if "generate " in queries:
-                      ImageGenerationQuery = str(queries)
-                      ImageExecution = True
+                    ImageGenerationQuery = str(queries)
+                    ImageExecution = True
                       
             for queries in Decision:
                 if any(queries.startswith(func) for func in Functions):
@@ -88,20 +81,15 @@ def MainExecution():
                         speak(response)
                     TaskExecution = True
                         
-            if ImageExecution == True:
-                with open(r"Frontend\Files\ImageGeneration.data", "w", encoding='utf-8') as file:
-                    file.write(f"{ImageGenerationQuery},True")
-                    
+            if ImageExecution:
                 try:
-                    p1 = subprocess.Popen([sys.executable, r'backend\imagegeneration.py'],
-                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                          stdin=subprocess.PIPE, shell=False)
-                    subprocesses.append(p1)
-                    
+                    from backend.image_generation import GenerateImages
+                    t = threading.Thread(target=GenerateImages, args=(ImageGenerationQuery,), daemon=True)
+                    t.start()
                 except Exception as e:
-                    print(f"Error starting imagegeneration.py: {e}")
+                    logger.error(f"Error starting image generation thread: {e}", exc_info=True)
                     
-            if G and R or R:
+            if R:
                 print("Searching...")
                 SetAssistantStatus("Thinking...")
                 Answer = RealtimeSearchEngine(QueryModifier(Merged_query))
@@ -139,11 +127,11 @@ def MainExecution():
             SetAssistantStatus("Active")
     except Exception as e:
         err_msg = str(e).lower()
-        if "getaddrinfo" in err_msg or "connection" in err_msg or "resolve" in err_msg or "offline" in err_msg:
-            print(f"Network connection error in MainExecution: {e}. Retrying in 5 seconds...")
+        if any(keyword in err_msg for keyword in ["getaddrinfo", "connection", "resolve", "offline"]):
+            logger.warning(f"Network connection error in MainExecution: {e}. Retrying in 5 seconds...")
             sleep(5)
         else:
-            print(f"Error in MainExecution: {e}. Retrying in 2 seconds...")
+            logger.error(f"Error in MainExecution: {e}. Retrying in 2 seconds...", exc_info=True)
             sleep(2)
         return False
             

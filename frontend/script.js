@@ -767,6 +767,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 300); // Wait for transition fade-out (300ms)
     }
 
+    function showNotification(containerId, message, type = "error") {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.textContent = message.toUpperCase();
+        container.className = `hud-notification ${type}`;
+        container.style.display = "flex";
+        
+        if (container.timeoutId) clearTimeout(container.timeoutId);
+        container.timeoutId = setTimeout(() => {
+            container.style.display = "none";
+        }, 4000);
+    }
+
     if (btnOpenSettings) {
         btnOpenSettings.addEventListener("click", () => {
             // Load both forms
@@ -946,7 +959,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     }, 800);
                 } else {
                     btnSaveApi.textContent = "ERROR SAVING";
-                    alert("Error saving: " + (res.error || "Unknown error"));
+                    showNotification("settings-notification", "Error saving: " + (res.error || "Unknown error"));
                     setTimeout(() => { btnSaveApi.textContent = "SAVE CONFIGURATION"; }, 1500);
                 }
             } catch (err) {
@@ -982,7 +995,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const assistantVal = document.getElementById("input-assistantname") ? document.getElementById("input-assistantname").value.trim() : "";
             
             if (!usernameVal || !assistantVal) {
-                alert("Username and Assistant Core name cannot be empty.");
+                showNotification("settings-notification", "Username and Assistant Core name cannot be empty.");
                 return;
             }
             
@@ -1003,7 +1016,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     }, 800);
                 } else {
                     btnSavePersonal.textContent = "ERROR UPDATING";
-                    alert("Error: " + (res.error || "Unknown error"));
+                    showNotification("settings-notification", "Error: " + (res.error || "Unknown error"));
                     setTimeout(() => { btnSavePersonal.textContent = "UPDATE IDENTITY"; }, 1500);
                 }
             } catch (err) {
@@ -1052,7 +1065,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (btnInitSystem) {
         btnInitSystem.addEventListener("click", async () => {
             if (typeof eel === "undefined") {
-                alert("Offline mode: Python backend not linked.");
+                showNotification("onboarding-notification", "Offline mode: Python backend not linked.");
                 if (onboardingScreen) onboardingScreen.style.display = "none";
                 return;
             }
@@ -1064,7 +1077,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const obHf = document.getElementById("ob-hf-key") ? document.getElementById("ob-hf-key").value.trim() : "";
             
             if (!obUsername || !obAssistant || !obGroq) {
-                alert("Please fill in Username, Assistant name, and a primary Groq API Key.");
+                showNotification("onboarding-notification", "Please fill in Username, Assistant name, and a primary Groq API Key.");
                 return;
             }
             
@@ -1100,7 +1113,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else {
                     btnInitSystem.textContent = "INITIALIZATION FAILED";
                     const errMsg = (!infoRes || !infoRes.success) ? (infoRes.error || "Personal info error") : (apiRes.error || "API key error");
-                    alert("Initialization error: " + errMsg);
+                    showNotification("onboarding-notification", "Initialization error: " + errMsg);
                     setTimeout(() => { btnInitSystem.textContent = "INITIALIZE CORE PROTOCOL"; }, 1500);
                 }
             } catch (err) {
@@ -1203,4 +1216,110 @@ document.addEventListener("DOMContentLoaded", () => {
     // Poll chat log every 1.5 seconds
     pollChatLog();
     setInterval(pollChatLog, 1500);
+
+    // ==========================================
+    // System Auto-Updater Logic
+    // ==========================================
+    const btnCheckUpdate = document.getElementById("btn-check-update");
+    const btnStartUpdate = document.getElementById("btn-start-update");
+    const updateMessage = document.getElementById("update-message");
+    const updateBadge = document.getElementById("update-badge");
+    const progressContainer = document.getElementById("update-progress-container");
+    const progressFill = document.getElementById("update-progress-fill");
+    const progressText = document.getElementById("update-progress-text");
+    
+    let targetDownloadUrl = null;
+    let progressTimer = null;
+    
+    if (btnCheckUpdate) {
+        btnCheckUpdate.addEventListener("click", async () => {
+            if (typeof eel === "undefined") {
+                if (updateMessage) updateMessage.textContent = "Offline mode: Update checker requires connection to Python host.";
+                return;
+            }
+            
+            btnCheckUpdate.textContent = "ALIGNING MATRIX...";
+            btnCheckUpdate.disabled = true;
+            if (updateMessage) updateMessage.textContent = "Connecting to Core Protocol telemetry servers...";
+            
+            try {
+                const res = await eel.check_for_updates()();
+                btnCheckUpdate.textContent = "CHECK FOR UPDATES";
+                btnCheckUpdate.disabled = false;
+                
+                if (res && res.success) {
+                    if (res.update_available) {
+                        if (updateBadge) {
+                            updateBadge.textContent = `LATEST: ${res.latest_version}`;
+                            updateBadge.style.color = "#ff4a4a";
+                            updateBadge.style.borderColor = "#ff4a4a";
+                        }
+                        if (updateMessage) {
+                            updateMessage.innerHTML = `<strong>NEW VERSION DETECTED: ${res.latest_version}</strong><br><br>Changelog:<br>${res.changelog}`;
+                        }
+                        if (btnStartUpdate) {
+                            btnStartUpdate.style.display = "inline-block";
+                            targetDownloadUrl = res.download_url;
+                        }
+                    } else {
+                        if (updateMessage) updateMessage.textContent = `All core elements are fully aligned. Currently running the latest build version ${res.latest_version}.`;
+                        if (btnStartUpdate) btnStartUpdate.style.display = "none";
+                    }
+                } else {
+                    if (updateMessage) updateMessage.textContent = `Failed to align version signatures: ${res.error || 'Connection timed out'}`;
+                }
+            } catch (err) {
+                console.error("Error checking for updates:", err);
+                btnCheckUpdate.textContent = "CHECK FOR UPDATES";
+                btnCheckUpdate.disabled = false;
+                if (updateMessage) updateMessage.textContent = "Error executing checking matrix: " + err;
+            }
+        });
+    }
+    
+    if (btnStartUpdate) {
+        btnStartUpdate.addEventListener("click", async () => {
+            if (!targetDownloadUrl || typeof eel === "undefined") return;
+            
+            btnStartUpdate.style.display = "none";
+            if (btnCheckUpdate) btnCheckUpdate.style.display = "none";
+            if (progressContainer) progressContainer.style.display = "block";
+            if (updateMessage) updateMessage.textContent = "Securing socket connection and initializing core download...";
+            
+            try {
+                await eel.start_update_download(targetDownloadUrl)();
+                
+                progressTimer = setInterval(async () => {
+                    const statusRes = await eel.get_update_progress()();
+                    if (statusRes) {
+                        const progress = statusRes.progress;
+                        const status = statusRes.status;
+                        
+                        if (progressFill) progressFill.style.width = `${progress}%`;
+                        if (progressText) progressText.textContent = `Downloading: ${progress}% (${status.toUpperCase()})`;
+                        
+                        if (status === "downloading") {
+                            if (updateMessage) updateMessage.textContent = "Streaming core archive files in background. User configuration settings will be preserved.";
+                        } else if (status === "ready") {
+                            clearInterval(progressTimer);
+                            if (updateMessage) updateMessage.textContent = "Download complete. Rebooting and invoking setup wizard...";
+                            setTimeout(() => {
+                                // Installer will have been triggered by backend, app closes automatically.
+                            }, 1000);
+                        } else if (status === "failed") {
+                            clearInterval(progressTimer);
+                            if (updateMessage) updateMessage.textContent = "System update transmission failed. Please retry connection.";
+                            if (btnStartUpdate) btnStartUpdate.style.display = "inline-block";
+                            if (btnCheckUpdate) btnCheckUpdate.style.display = "inline-block";
+                            if (progressContainer) progressContainer.style.display = "none";
+                        }
+                    }
+                }, 1000);
+                
+            } catch (err) {
+                console.error("Error starting update download:", err);
+                if (updateMessage) updateMessage.textContent = "Failed to start update download: " + err;
+            }
+        });
+    }
 });

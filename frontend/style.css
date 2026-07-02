@@ -1712,3 +1712,30 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* Custom Styled notifications for in-theme alerts */
+.hud-notification {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 10px 15px;
+    border-left: 3px solid #ff2a2a;
+    background: rgba(255, 42, 42, 0.08);
+    color: #ff8888;
+    border-top: 1px solid rgba(255, 42, 42, 0.2);
+    border-bottom: 1px solid rgba(255, 42, 42, 0.2);
+    border-right: 1px solid rgba(255, 42, 42, 0.2);
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+    animation: fade-in-left 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.hud-notification.success {
+    border-left-color: #00ffaa;
+    background: rgba(0, 255, 170, 0.08);
+    color: #a3ffd6;
+    border-top-color: rgba(0, 255, 170, 0.2);
+    border-bottom-color: rgba(0, 255, 170, 0.2);
+    border-right-color: rgba(0, 255, 170, 0.2);
+}
+

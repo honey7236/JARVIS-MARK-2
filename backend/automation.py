@@ -1,57 +1,49 @@
+from datetime import datetime, timedelta
+import logging
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # Suppress pygame welcome message banner
-import sys
-import time
 import random
 import re
-import threading
 import subprocess
-import webbrowser
-from datetime import datetime, timedelta
+import threading
+import time
 from urllib.parse import quote
-import asyncio
+import webbrowser
 
 # Third-party libraries
-import psutil
-import requests
+from AppOpener import close, open as appopen
 import eel
 from plyer import notification
-import keyboard
+import psutil
 import pyautogui
-from bs4 import BeautifulSoup
-from dotenv import dotenv_values
+import requests
 from rich import print
-
-# AppOpener and pywhatkit
-from AppOpener import close, open as appopen
 
 # Bypass pywhatkit's internet connection check on import which can hang indefinitely
 import pywhatkit.core.core
 pywhatkit.core.core.check_connection = lambda: None
-
-from pywhatkit import search, playonyt
-try:
-    from backend.groq_client import Groq
-except ImportError:
-    from groq_client import Groq
+import pywhatkit as pw
 
 # Project-specific imports
-from backend.text_to_speech import speak
 from backend.chat_bot import ChatBot
+import backend.config_manager as config_manager
+from backend.speech_to_text import listen
+from backend.text_to_speech import speak
 from data.DLG_data import online_DLG, offline_DLG
-from data.Web_Data import websites
+from data.music_library import music_library
 from data.contact_data import contacts
+from data.Web_Data import websites
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # ==========================================
 # Constants & Global State
 # ==========================================
-# Load environment variables from the .env file.
-env_vars = dotenv_values(".env")
-OpenWeatherAPIKey = env_vars.get("OpenWeatherAPIKey")
-GNewsAPIKey = env_vars.get("GNewsAPIKey")
+# Load environment variables via Config Manager.
+OpenWeatherAPIKey = config_manager.get_api_key("OpenWeatherAPIKey")
+GNewsAPIKey = config_manager.get_api_key("GNewsAPIKey")
 API_KEY = OpenWeatherAPIKey
-
-# Greetings will be chosen dynamically on each check to keep responses fresh.
 
 cached_network_data = {
     "status": "Checking...",
@@ -62,34 +54,6 @@ cached_network_data = {
 
 reminders = []
 reminder_thread_started = False
-
-# ==========================================
-# Groq & Content Writing Constants (from automation_source.py)
-# ==========================================
-GroqAPIKey = env_vars.get("GroqAPIKey")  # Retrieve the Groq API key from the environment variables.
-
-# Define CSS classes for parsing elements in the HTML content.
-classes = ["zCubwf", "hgKElc", "LTK00 sY7ric", "Z0LcW", "gsrt vk_bk FzvWSb YwPhnf", "pclqee", "tw-Data-text tw-text-small tw-ta", 
-           "IZ6rdc", "05uR6d LTK00", "vlzY6d", "webanswers-webanswers_table_webanswers-table", "dDoNo ikb4Bb gsrt", "sXLa0e", 
-           "LWkfKe", "VQF4g", "qv3Wpe", "kno-rdesc", "SPZz6b"]
-
-# Define a user-agent for making web requests.
-useragent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36'
-
-# Initialize the Groq client with the API key.
-client = Groq(api_key=GroqAPIKey)
-
-# Predefined professional responses for user interactions.
-professional_responses = [
-    "Your satisfaction is my top priority; feel free to reach out if there's anything else I can help you with.",
-    "I'm at your service for any additional questions or support you may need-don't hesitate to ask.", 
-]
-
-# List to store chatbot messages.
-messages = []
-
-# System message to provide context to the chatbot.
-SystemChatBot = [{"role": "system", "content": f"Hello, I am {os.environ.get('Username', 'User')}, You're a content writer. You have to write content like letters, codes, applications, eassys, notes, songs, poems etc."}]
 
 # ==========================================
 # Battery Automation
@@ -123,7 +87,7 @@ def battery_alert():
         else:
             return f"Battery is at {percentage} percent"
     except Exception as e:
-        print("Battery Alert Error:", e)
+        logger.error(f"Battery Alert Error: {e}", exc_info=True)
         return "Sorry, I could not check the battery status."
 
 
@@ -187,7 +151,7 @@ def network_status_loop():
             online = "Disconnected"
             
         now = time.time()
-        if online == "Connected" and (now - last_speed_check >= 30 or last_speed_check == 0):
+        if online == "Connected" and (now - last_speed_check >= 60 or last_speed_check == 0):
             try:
                 # Fast download check (300 KB)
                 dl_start = time.time()
@@ -204,7 +168,7 @@ def network_status_loop():
                 
                 last_speed_check = now
             except Exception as e:
-                print("Speed test error:", e)
+                logger.error(f"Speed test error: {e}", exc_info=True)
                 download_speed = "Error"
                 upload_speed = "Error"
                 
@@ -220,7 +184,7 @@ def network_status_loop():
         except Exception:
             pass
             
-        time.sleep(5)
+        time.sleep(15)
 
 
 def start_network_monitoring():
@@ -250,7 +214,7 @@ def get_news():
         headlines = [f"{i}. {article.get('title', '')}" for i, article in enumerate(articles, 1)]
         return "\n".join(headlines)
     except Exception as e:
-        print("News Error:", e)
+        logger.error(f"News Error: {e}", exc_info=True)
         return "Unable to fetch news"
 
 
@@ -279,7 +243,7 @@ def open_app(app, sess=requests.session()):
 
         try:
             webbrowser.open(url)
-        except:
+        except Exception:
             webbrowser.open(f"https://www.google.com/search?q={site}")
         return f"Opening {site}"
 
@@ -289,15 +253,13 @@ def open_app(app, sess=requests.session()):
 def play_music_on_youtube(song_name):
     song_clean = song_name.lower().strip()
     try:
-        from data.musiclibrary import music_library
         if song_clean in music_library:
             url = music_library[song_clean]
             webbrowser.open(url)
             return f"Playing {song_name} from music library"
     except Exception as e:
-        print("Error checking music library:", e)
+        logger.error(f"Error checking music library: {e}", exc_info=True)
         
-    import pywhatkit as pw
     pw.playonyt(song_name)
     return f"Playing {song_name} on YouTube"
 
@@ -320,7 +282,7 @@ def take_screenshot():
         screenshot.save(path)
         return f"Screenshot saved on your Desktop as {filename}"
     except Exception as e:
-        print("Screenshot Error:", e)
+        logger.error(f"Screenshot Error: {e}", exc_info=True)
         return "Unable to take screenshot"
 
 
@@ -345,7 +307,7 @@ def parse_time(time_input):
     for fmt in formats:
         try:
             return datetime.strptime(time_input, fmt)
-        except:
+        except ValueError:
             pass
     return None
 
@@ -369,7 +331,7 @@ def save_reminder(task, time_input):
         "task": task,
         "time": remind_time
     })
-    print("✅ Saved:", task, "at", remind_time.strftime("%I:%M %p"))
+    logger.info(f"✅ Saved reminder: {task} at {remind_time.strftime('%I:%M %p')}")
     return f"Reminder set for {task} at {remind_time.strftime('%I:%M %p')}"
 
 
@@ -388,8 +350,8 @@ def reminder_loop():
                         message=r["task"],
                         timeout=10
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Notification Error: {e}", exc_info=True)
                 
                 reminders.remove(r)
         time.sleep(5)
@@ -398,7 +360,7 @@ def reminder_loop():
 def start_reminder_thread():
     thread = threading.Thread(target=reminder_loop, daemon=True)
     thread.start()
-    print("🚀 Reminder system started")
+    logger.info("🚀 Reminder system started")
 
 
 # ==========================================
@@ -426,7 +388,7 @@ def get_system_stats():
             f"{used_disk} GB used, {free_disk} GB free out of {total_disk} GB."
         )
     except Exception as e:
-        print("System Stats Error:", e)
+        logger.error(f"System Stats Error: {e}", exc_info=True)
         return "Unable to fetch system stats"
     
 
@@ -451,7 +413,7 @@ def display_system_info():
             "disk_details": f"{free_disk} GB Free"
         }
     except Exception as e:
-        print("System Info Error:", e)
+        logger.error(f"System Info Error: {e}", exc_info=True)
         return {
             "cpu": "N/A",
             "ram_percent": "N/A",
@@ -471,63 +433,58 @@ def get_city_from_ip():
         city = data.get("city")
         return city
     except Exception as e:
-        print("Location Error:", e)
+        logger.error(f"Location Error: {e}", exc_info=True)
         return None
 
 
-def get_weather():
+def _fetch_weather_data():
+    """Private helper to fetch OpenWeather API data based on current IP location."""
+    city = get_city_from_ip()
+    if not city:
+        return None, "Unable to detect your location"
+
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
     try:
-        city = get_city_from_ip()
-        if not city:
-            return "Unable to detect your location"
-
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         data = response.json()
-
-        if data["cod"] != 200:
-            return "Weather data not found"
-
-        temp = data["main"]["temp"]
-        feels_like = data["main"]["feels_like"]
-        weather = data["weather"][0]["description"]
-
-        return f"Current weather in {city}: {temp}°C, feels like {feels_like}°C with {weather}"
+        if data.get("cod") != 200:
+            return None, "Weather data not found"
+        return data, city
     except Exception as e:
-        print("Weather Error:", e)
-        return "Unable to fetch weather"
-    
+        logger.error(f"Weather fetch error: {e}", exc_info=True)
+        return None, "Unable to fetch weather"
+
+
+def get_weather():
+    data, error_or_city = _fetch_weather_data()
+    if not data:
+        return error_or_city
+    city = error_or_city
+    temp = data["main"]["temp"]
+    feels_like = data["main"]["feels_like"]
+    weather = data["weather"][0]["description"]
+    return f"Current weather in {city}: {temp}°C, feels like {feels_like}°C with {weather}"
+
 
 def display_weather():
-    try:
-        city = get_city_from_ip()
-        if not city:
-            return "Unable to detect your location"
+    data, error_or_city = _fetch_weather_data()
+    if not data:
+        return error_or_city
+    city = error_or_city
+    temp = data["main"]["temp"]
+    feels_like = data["main"]["feels_like"]
+    weather = data["weather"][0]["description"]
+    humidity = data["main"]["humidity"]
+    wind_speed = data["wind"]["speed"]
 
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
-        response = requests.get(url)
-        data = response.json()
-
-        if data["cod"] != 200:
-            return "Weather data not found"
-
-        temp = data["main"]["temp"]
-        feels_like = data["main"]["feels_like"]
-        weather = data["weather"][0]["description"]
-        humidity = data["main"]["humidity"]
-        wind_speed = data["wind"]["speed"]
-
-        return {
-            "city": city,
-            "temp": f"{temp}°C",
-            "feels_like": f"{feels_like}°C",
-            "description": weather.title(),
-            "humidity": f"{humidity}%",
-            "wind": f"{wind_speed} m/s"
-        }
-    except Exception as e:
-        print("Weather Error:", e)
-        return "Unable to fetch weather"
+    return {
+        "city": city,
+        "temp": f"{temp}°C",
+        "feels_like": f"{feels_like}°C",
+        "description": weather.title(),
+        "humidity": f"{humidity}%",
+        "wind": f"{wind_speed} m/s"
+    }
 
 
 # ==========================================
@@ -548,7 +505,7 @@ def open_website(command):
 
     try:
         webbrowser.open(url)
-    except:
+    except Exception:
         webbrowser.open(f"https://www.google.com/search?q={site}")
     return f"Opening {site}"
 
@@ -557,7 +514,6 @@ def open_website(command):
 # WhatsApp Automation
 # ==========================================
 def send_whatsapp_instant(receiver, message):
-    import pyautogui
     try:
         phone = contacts.get(receiver.lower(), receiver)
         encoded_message = quote(message)
@@ -567,11 +523,8 @@ def send_whatsapp_instant(receiver, message):
         pyautogui.hotkey("enter")
         return f"Message sent to {receiver}"
     except Exception as e:
-        print("Error:", e)
+        logger.error(f"WhatsApp send error: {e}", exc_info=True)
         return "Failed to send message"
-
-
-
 
 
 # ==========================================
@@ -596,7 +549,7 @@ def process_automation(c):
         try:
             close(app_name, match_closest=True, throw_error=True)
             return f"Closing {app_name}"
-        except:
+        except Exception:
             pyautogui.hotkey('alt', 'f4')
             return f"Attempted to close {app_name}"
 
@@ -677,7 +630,6 @@ def process_automation(c):
 
     # reminder automation
     elif command_text.startswith("reminder"):
-        import re
         time_match = re.search(r'\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b', command_text)
         if time_match:
             time_input = time_match.group(1)
@@ -733,7 +685,6 @@ def process_automation(c):
 
     # send message on whatsapp
     elif "send message on whatsapp" in command_text:
-        from backend.speech_to_text import listen
         speak("Whom should I send the message to?")
         receiver = listen()
 

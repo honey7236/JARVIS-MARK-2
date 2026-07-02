@@ -1,28 +1,30 @@
-import logging
-import cohere
-import backend.config_manager as config_manager
-from rich import print
+import cohere  # Import the Cohere library for AI services.
+from rich import print  # Import the Rich library to enhance terminal outputs.
+from dotenv import dotenv_values  # Import dotenv to load environment variables from a .env file.
 
-# Initialize logger
-logger = logging.getLogger(__name__)
+# Load environment variables from the .env file.
+env_vars = dotenv_values(".env")
 
-# Retrieve API key via Config Manager.
-CohereAPIKey = config_manager.get_api_key("CohereAPIKey") or config_manager.get_api_key("cohere")
+# Retrieve API key.
+CohereAPIKey = env_vars.get("CohereAPIKey") or env_vars.get("cohere")
 
 co = None
 
 def get_cohere_client():
-    global co, CohereAPIKey
+    global co
     if co is not None:
         return co
-    CohereAPIKey = config_manager.get_api_key("CohereAPIKey") or config_manager.get_api_key("cohere")
+    global env_vars, CohereAPIKey
+    env_vars = dotenv_values(".env")
+    CohereAPIKey = env_vars.get("CohereAPIKey") or env_vars.get("cohere")
     if not CohereAPIKey or "your_cohere_api_key" in CohereAPIKey.lower():
         return None
     try:
+        import cohere
         co = cohere.Client(api_key=CohereAPIKey)
         return co
     except Exception as e:
-        logger.error(f"[CommandManager] Failed to initialize Cohere client: {e}", exc_info=True)
+        print(f"[CommandManager] Failed to initialize Cohere client: {e}")
         return None
 
 # Define a list of recognized function keywords for task categorization.
@@ -31,6 +33,9 @@ funcs = [
     "generate image", "system", "content", "google search",
     "youtube search", "reminder", "weather", "news"
 ]
+
+# Initialize an empty list to store user messages.
+messages = []
 
 # Define the preamble that guides the AI model on how to categorize queries.
 preamble = """
@@ -81,6 +86,9 @@ ChatHistory = [
 
 # Define the main function for decision-making on queries.
 def FirstLayerDMM(prompt: str = "test"):
+    # Add the user's query to the messages list.
+    messages.append({"role": "user", "content": f"{prompt}"})
+
     client = get_cohere_client()
     if not client:
         # Fallback local parser if Cohere is not configured
@@ -120,7 +128,7 @@ def FirstLayerDMM(prompt: str = "test"):
             if event.event_type == "text-generation":
                 response += event.text  # Append generated text to the response.
     except Exception as e:
-        logger.warning(f"[CommandManager] Cohere API error: {e}. Falling back to local parser.")
+        print(f"[CommandManager] Cohere API error: {e}. Falling back to local parser.")
         # Fallback to rule-based
         prompt_lower = prompt.lower().strip()
         if "weather" in prompt_lower:

@@ -1,18 +1,13 @@
-import logging
+import speech_recognition as sr
 import os
-import threading
+import mtranslate as mt
+from dotenv import dotenv_values
 import time
 
-import backend.config_manager as config_manager
-import backend.data_manager as data_manager
-import mtranslate as mt
-import speech_recognition as sr
-
-# Initialize logger
-logger = logging.getLogger(__name__)
-
-# Get the input language setting via Config Manager.
-InputLanguage = config_manager.get_setting("InputLanguage") or "en"
+# Load environment variables from the .env file.
+env_vars = dotenv_values(".env")
+# Get the input language setting from the environment variables.
+InputLanguage = env_vars.get("InputLanguage") or "en"
 
 # Initialize speech recognizer
 recognizer = sr.Recognizer()
@@ -24,25 +19,26 @@ recognizer.dynamic_energy_adjustment_damping = 0.15
 recognizer.dynamic_energy_ratio = 1.5
 
 # Set path for assistant status telemetry files
-TempDirPath = os.path.join("frontend", "Files")
+current_dir = os.getcwd()
+TempDirPath = rf"{current_dir}/Frontend/Files"
 os.makedirs(TempDirPath, exist_ok=True)
 
-# Calibrate microphone for ambient noise floor once on startup in a background thread
-def _calibrate_mic():
-    logger.info("[SpeechToText] Calibrating microphone for ambient noise floor in background...")
-    try:
-        with sr.Microphone() as source:
-            recognizer.adjust_for_ambient_noise(source, duration=1.0)
-        logger.info(f"[SpeechToText] Background calibration complete. Energy threshold set to: {recognizer.energy_threshold}")
-    except Exception as e:
-        logger.warning(f"[SpeechToText] Microphone calibration skipped: {e}")
-
-threading.Thread(target=_calibrate_mic, daemon=True).start()
+# Calibrate microphone for ambient noise floor once on startup
+print("[SpeechToText] Calibrating microphone for ambient noise floor...")
+try:
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source, duration=1.0)
+    print(f"[SpeechToText] Calibration complete. Energy threshold set to: {recognizer.energy_threshold}")
+except Exception as e:
+    print(f"[SpeechToText] Microphone calibration skipped: {e}")
 
 # Function to set the assistant's status by writing it to a file and updating Eel.
 def SetAssistantStatus(Status):
-    status_file_path = os.path.join(TempDirPath, "Status.data")
-    data_manager.write_text(status_file_path, Status)
+    try:
+        with open(rf'{TempDirPath}/Status.data', "w", encoding='utf-8') as file:
+            file.write(Status)
+    except Exception:
+        pass
 
     try:
         import eel
@@ -89,21 +85,15 @@ def listen():
     elif recognize_language == "hi":
         recognize_language = "hi-IN"
 
-    try:
-        with sr.Microphone() as source:
-            try:
-                # Capture speech natively without timing out (blocks until input is detected)
-                audio = recognizer.listen(source)
-            except Exception as mic_err:
-                logger.error(f"[SpeechToText] Microphone listen error: {mic_err}", exc_info=True)
-                SetAssistantStatus("Active")
-                time.sleep(1.0)  # Sleep on hardware/mic errors to prevent busy-looping
-                return ""
-    except Exception as mic_init_err:
-        logger.error(f"[SpeechToText] Microphone initialization failed (is it connected?): {mic_init_err}", exc_info=True)
-        SetAssistantStatus("Active")
-        time.sleep(2.0)
-        return ""
+    with sr.Microphone() as source:
+        try:
+            # Capture speech natively without timing out (blocks until input is detected)
+            audio = recognizer.listen(source)
+        except Exception as mic_err:
+            print(f"[SpeechToText] Microphone listen error: {mic_err}")
+            SetAssistantStatus("Active")
+            time.sleep(1.0)  # Sleep on hardware/mic errors to prevent busy-looping
+            return ""
 
     SetAssistantStatus("Thinking...")
     try:
@@ -124,11 +114,10 @@ def listen():
             try:
                 return QueryModifier(UniversalTranslator(text))
             except Exception as trans_err:
-                logger.error(f"Translation network error: {trans_err}", exc_info=True)
+                print(f"Translation network error: {trans_err}")
                 return QueryModifier(text)
                 
-    except Exception as e:
-        logger.warning(f"Google speech recognition failed or did not hear anything: {e}")
+    except Exception:
         SetAssistantStatus("Active")
         time.sleep(0.2)  # Short cooldown on recognition failures
         return ""

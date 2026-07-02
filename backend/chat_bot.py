@@ -1,26 +1,25 @@
-import datetime
-import logging
 import os
-import backend.config_manager as config_manager
-import backend.data_manager as data_manager
-
 try:
     from backend.groq_client import Groq
 except ImportError:
     from groq_client import Groq
+from json import load, dump  # Importing functions to read and write JSON files.
+import datetime  # Importing the datetime module for real-time date and time information.
+from dotenv import load_dotenv, dotenv_values  # Importing dotenv_values to read environment variables from a .env file.
 
-# Initialize logger
-logger = logging.getLogger(__name__)
+# Load environment variables from the .env file.
+env_vars = dotenv_values(".env")
 
-# Retrieve specific settings via Config Manager.
-Username = config_manager.get_setting("Username", "User")
-Assistantname = config_manager.get_setting("Assistantname", "JARVIS")
-# Get the first Groq API key (or default) for initialization.
-groq_keys = config_manager.get_groq_api_keys()
-GroqAPIKey = groq_keys[0] if groq_keys else None
+# Retrieve specific environment variables for username, assistant name, and API key.
+Username = env_vars.get("Username")
+Assistantname = env_vars.get("Assistantname")
+GroqAPIKey = env_vars.get("GroqAPIKey")
 
 # Initialize the Groq client using the provided API key.
 client = Groq(api_key=GroqAPIKey)
+
+# Initialize an empty list to store chat messages.
+messages = []
 
 # Define a system message that provides context to the AI chatbot about its role and behavior.
 System = f"""Hello, I am {Username}, You are a very accurate and advanced AI chatbot named {Assistantname} which also has real-time up-to-date information from the internet.
@@ -34,8 +33,18 @@ SystemChatBot = [
     {"role": "system", "content": System}
 ]
 
-# Path to the chat log JSON file.
-chat_log_path = os.path.join("data", "chatlog.json")
+# Ensure the Data directory exists before writing/reading the chat logs
+os.makedirs("Data", exist_ok=True)
+
+# Attempt to load the chat log from a JSON file.
+try:
+    with open(r"Data\ChatLog.json", "r") as f:
+        messages = load(f) # Load existing messages from the chat log.
+except Exception:
+    # If the file doesn't exist or is corrupted, create/overwrite it as an empty JSON array.
+    messages = []
+    with open(r"Data\ChatLog.json", "w") as f:
+        dump([], f)
 
 # Function to get real-time date and time information.
 def RealtimeInformation():
@@ -69,15 +78,19 @@ def ChatBot(Query, retries=1):
 
     try:
         # Load the existing chat log from the JSON file.
-        local_messages = data_manager.load_json(chat_log_path, default=[])
+        try:
+            with open(r"Data\ChatLog.json", "r") as f:
+                messages = load(f)
+        except Exception:
+            messages = []
 
         # Append the user's query to the messages list.
-        local_messages.append({"role": "user", "content": f"{Query}"})
+        messages.append({"role": "user", "content": f"{Query}"})
 
         # Make a request to the Groq API for a response.
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",  # Specify the AI model to use.
-            messages=SystemChatBot + [{"role": "system", "content": RealtimeInformation()}] + local_messages,
+            messages=SystemChatBot + [{"role": "system", "content": RealtimeInformation()}] + messages,  # Include system instructions, real-time info, a
             max_tokens=1024,  # Limit the maximum tokens in the response.
             temperature=0.7,  # Adjust response randomness (higher means more random).
             top_p=1,  # Use nucleus sampling to control diversity.
@@ -95,18 +108,20 @@ def ChatBot(Query, retries=1):
         Answer = Answer.replace("</s>", "")  # Clean up any unwanted tokens from the response.
 
         # Append the chatbot's response to the messages list.
-        local_messages.append({"role": "assistant", "content": Answer})
+        messages.append({"role": "assistant", "content": Answer})
         # Save the updated chat log to the JSON file.
-        data_manager.save_json(chat_log_path, local_messages)
+        with open(r"Data\ChatLog.json", "w") as f:
+            dump(messages, f, indent=4)
 
         # Return the formatted response.
         return AnswerModifier(Answer=Answer)
 
     except Exception as e:
-        # Handle errors by logging the exception and resetting the chat log.
-        logger.error(f"Error in ChatBot: {e}", exc_info=True)
+        # Handle errors by printing the exception and resetting the chat log.
+        print(f"Error in ChatBot: {e}")
         if retries > 0:
-            data_manager.save_json(chat_log_path, [])
+            with open(r"Data\ChatLog.json", "w") as f:
+                dump([], f, indent=4)
             return ChatBot(Query, retries=retries - 1)  # Retry the query after resetting the log.
         else:
             raise e

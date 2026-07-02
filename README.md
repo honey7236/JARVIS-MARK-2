@@ -43,40 +43,66 @@ JARVIS MARK 2/
 ├── app.py                     # Main Eel GUI controller and API endpoints
 ├── main.py                    # Core decision-making engine and query router
 ├── requirements.txt           # Python package dependencies
-├── .env                       # Environment configuration file
+├── .env                       # Environment configuration file (automatically generated or user-configured)
+├── JARVIS_Mark_II.spec        # PyInstaller specification file for compilation
+├── installer.iss              # Inno Setup packaging script for creating a Windows Installer
 ├── backend/                   # Core business logic and integrations
 │   ├── automation.py          # Main automation pipelines (system, apps, Groq)
 │   ├── chat_bot.py            # Chatbot query handling (with conversation history)
 │   ├── command_manager.py     # Decision-making model (DMM) for routing commands
-│   ├── imagegeneration.py     # AI image generation subsystem (Stable Diffusion XL)
-│   ├── realtime_search_engine.py # Scraping-based realtime search engine
-│   ├── speech_to_text.py      # Voice listening and transcription
-│   └── text_to_speech.py      # Neural Speech generation
+│   ├── config_manager.py      # Thread-safe configuration loader with Local AppData write fallback
+│   ├── data_manager.py        # Safe atomic JSON/text file I/O operations and Local AppData path resolver
+│   ├── groq_client.py         # Groq API client wrapper supporting transparent API key rotation
+│   ├── image_generation.py    # AI image generation subsystem (Stable Diffusion XL via Hugging Face)
+│   ├── realtime_search_engine.py # Scraping-based realtime search engine using Llama 3 on Groq
+│   ├── speech_to_text.py      # Voice listening, energy thresholding, and transcription
+│   ├── text_to_speech.py      # Neural speech generation using Edge-TTS
+│   └── updater.py             # Automatic update subsystem integrating with GitHub Releases API
 ├── data/                      # Data storage and configuration
-│   ├── DLG_data.py            # Dialogues and pre-configured responses
-│   ├── Web_Data.py            # Predefined website mappings
-│   ├── contact_data.py        # Contacts data model
-│   └── contacts.json          # Contacts database
-├── frontend/                  # Web-based dashboard GUI (Eel / HTML / JS / CSS)
-└── memory/                    # Short-term session logs and database storage
+│   ├── chatlog.json           # Local chat history log
+│   ├── contact_data.py        # Contacts data structure model
+│   ├── contacts.json          # Contacts database
+│   ├── dlg_data.py            # Custom dialog patterns and voice line structures
+│   ├── music_library.py       # Predefined local and YouTube music routes
+│   └── web_data.py            # Custom website shortcuts and query structures
+└── frontend/                  # Web-based dashboard GUI (Eel / HTML / JS / CSS)
 ```
 
 ---
 
 ## 🛠️ Setup & Installation
 
-### 1. Prerequisites
-Ensure you have Python 3.9+ installed on your Windows system.
+### Option 1: Developer Setup (Running from Source)
 
-### 2. Install Dependencies
-Run the command below in the project directory to install all required libraries:
+#### 1. Prerequisites
+- **OS**: Windows (Required for desktop automation hooks and system APIs).
+- **Python**: Python 3.9 or higher.
+- **Hardware**: Working microphone and audio output.
+
+#### 2. Clone the Repository
 ```bash
+git clone https://github.com/honey7236/JARVIS-MARK-2.git
+cd "JARVIS MARK 2"
+```
+
+#### 3. Set Up Virtual Environment (Recommended)
+Set up a clean virtual environment using PowerShell or Command Prompt:
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+#### 4. Install Dependencies
+Run the command below to install all required libraries:
+```powershell
 pip install -r requirements.txt
 ```
-*Note: For `SpeechRecognition` and system audio capture, ensure a working microphone and PyAudio are configured.*
+> [!NOTE]
+> PyAudio compilation might require Visual Studio Build Tools with C++ desktop workload on Windows if precompiled wheels are not cached.
 
-### 3. Environment Configuration (`.env`)
-Create a `.env` file in the root directory:
+#### 5. Environment Configuration
+Create a `.env` file in the root directory (or let the onboarding interface generate it automatically on your first run).
+A sample configuration is shown below:
 ```ini
 Username = User
 Assistantname = JARVIS
@@ -90,13 +116,38 @@ HuggingFaceAPIKey = your_huggingface_api_key_here
 OpenWeatherAPIKey = your_openweathermap_api_key_here
 GNewsAPIKey = your_gnews_api_key_here
 ```
+> [!TIP]
+> You can input multiple Groq API keys separated by commas (or multiple `GroqAPIKey` entries) to enable key rotation and avoid API rate limits.
 
-### 4. Running the Assistant
-Start the application:
-```bash
+#### 6. Run the Application
+Start the assistant in development mode:
+```powershell
 python app.py
 ```
-This launches the backend systems, starts real-time network and telemetry threads, and opens the modern GUI dashboard.
+This launches the backend threads (telemetry, network monitoring) and starts the Eel-based web frontend in an Edge application window.
+
+---
+
+### Option 2: Building & Packaging (For Distribution)
+
+If you wish to compile JARVIS Mark II into a standalone executable and package it as a Windows installer:
+
+#### 1. Build Standalone Executable
+Compile the project using PyInstaller and the provided `.spec` configuration:
+```powershell
+pyinstaller JARVIS_Mark_II.spec
+```
+This packages the source code, libraries, and assets (static `frontend` files) into a single standalone binary directory. The executable will be created at `dist/Jarvis.exe`.
+
+#### 2. Create Windows Installer (Inno Setup)
+To build a professional installer wizard for end users:
+1. Download and install [Inno Setup](https://jrsoftware.org/isinfo.php).
+2. Open `installer.iss` in the Inno Setup Compiler GUI (or run the command-line compiler: `iscc installer.iss`).
+3. The build process compiles a setup package at `dist/JarvisSetup.exe`.
+
+> [!IMPORTANT]
+> **Production AppData Redirection**: When packaged and installed (e.g. inside `C:\Program Files\`), files inside the installation directory are write-protected. To prevent permission errors, the app automatically redirects all user files (`.env`, `contacts.json`, `chatlog.json`, generated image downloads) to the safe user directory:
+> `%LOCALAPPDATA%\JARVIS_Mark_II\`
 
 ---
 
@@ -146,8 +197,26 @@ Here is a list of the core Python modules and their key function definitions:
   * **`ChatBot(Query)`**: Communicates with Groq (`llama-3.3-70b-versatile`) to generate conversational replies with short-term context.
 * File: [realtime_search_engine.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/realtime_search_engine.py)
   * **`RealtimeSearchEngine(query)`**: Summarizes duckduckgo/google search results into brief sentences using LLMs.
-* File: [imagegeneration.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/imagegeneration.py)
+* File: [image_generation.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/image_generation.py)
   * **`GenerateImages(prompt)`**: Dispatches tasks to generate and display stable diffusion AI images.
+
+### ⚙️ Configuration & Data Managers
+* File: [config_manager.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/config_manager.py)
+  * **`get_setting(name, fallback)`**: Fetches a setting from configuration keys.
+  * **`save_api_keys(updated_keys)`**: Safely updates external API credentials in `.env`.
+  * **`get_groq_api_keys()`**: Retrieves list of registered keys.
+  * **`save_personal_info(username, assistantname)`**: Updates customization preferences.
+* File: [data_manager.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/data_manager.py)
+  * **`load_json(file_path, default)`**: Atomic read function resolving local appdata targets.
+  * **`save_json(file_path, data)`**: Atomic write function utilizing temporary swapping.
+  * **`read_text(file_path, default)`** / **`write_text(file_path, content)`**: Atomic utilities for logging system telemetry.
+* File: [groq_client.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/groq_client.py)
+  * Class **`Groq`**: Intercepts LLM calls, providing thread-safe load balancing and active API key rotation.
+
+### 🔄 Auto-Update Subsystem
+* File: [updater.py](file:///c:/Users/shrik/OneDrive/Desktop/JARVIS%20MARK%202/backend/updater.py)
+  * **`check_for_updates_sync()`**: Fetches latest release version and changelog from GitHub Releases API.
+  * **`start_download_async(download_url)`**: Initiates background update installation and handles application self-restart.
 
 ---
 

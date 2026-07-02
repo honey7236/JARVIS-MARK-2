@@ -1,31 +1,25 @@
-import asyncio
-import logging
-import os
+import os # Import os for file path handling
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # Suppress pygame welcome message banner
-import random
-
-import backend.config_manager as config_manager
-import backend.data_manager as data_manager
-import edge_tts
-import pygame
-
+import pygame # Import pygame library for handling audio playback
+import random # Import random for generating random choices
+import asyncio # Import asyncio for asynchronous operations
+import edge_tts # Import edge_tts for text-to-speech functionality
+from dotenv import dotenv_values # Import dotenv for reading environment variables from a .env file
 try:
     from backend.speech_to_text import SetAssistantStatus
 except ImportError:
     from speech_to_text import SetAssistantStatus
 
-# Initialize logger
-logger = logging.getLogger(__name__)
-
-# Get the AssistantVoice via Config Manager, with fallback.
-AssistantVoice = config_manager.get_setting("AssistantVoice") or "en-CA-LiamNeural"
+# Load environment variables from the .env file.
+env_vars = dotenv_values(".env")
+AssistantVoice = env_vars.get("AssistantVoice") or "en-CA-LiamNeural" # Get the AssistantVoice from the environment variables, with fallback.
 
 # Asynchronous function to convert text to an audio file
 async def TextToAudioFile(text, file_path) -> None:
     if os.path.exists(file_path): # Check if the file already exists.
         try:
             os.remove(file_path) # Attempt to remove old files if present.
-        except OSError:
+        except Exception:
             pass
         
     # Create the communicate object to generate speech.
@@ -37,8 +31,8 @@ def TTS(Text, func=lambda r=None: True):
     SetAssistantStatus("Answering...")
     
     # Generate unique filename for this TTS cycle to prevent Windows PermissionError Locks
-    file_path = data_manager._resolve_path(os.path.join("data", f"speech_{random.randint(1000, 9999)}.mp3"))
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    os.makedirs("Data", exist_ok=True)
+    file_path = rf"Data\speech_{random.randint(1000, 9999)}.mp3"
     
     retries = 3
     for attempt in range(retries):
@@ -62,7 +56,7 @@ def TTS(Text, func=lambda r=None: True):
             return True  # Return True if the audio played successfully.
         
         except Exception as e:  # Handle any exceptions during the process
-            logger.error(f"Error in TTS (attempt {attempt + 1}/{retries}): {e}. Make sure you are connected to the internet.", exc_info=True)
+            print(f"Error in TTS (attempt {attempt + 1}/{retries}): {e}")
             if attempt < retries - 1:
                 from time import sleep
                 sleep(1)
@@ -81,7 +75,7 @@ def TTS(Text, func=lambda r=None: True):
                 if os.path.exists(file_path):
                     os.remove(file_path)
             except Exception as e:  # Handle any exceptions during the cleanup
-                logger.error(f"Error in finally block: {e}", exc_info=True)
+                print(f"Error in finally block: {e}")
             SetAssistantStatus("Active")
                 
 # Function to manage Text-to-Speech (TTS) functionality with additional responses for long texts.
@@ -125,3 +119,4 @@ if __name__ == "__main__":
     while True:
         # Prompt user for input and pass it to speak function.
         speak(input("Enter Your Query: "))
+

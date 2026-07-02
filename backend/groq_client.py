@@ -1,11 +1,5 @@
-import logging
 import os
 import threading
-
-import backend.config_manager as config_manager
-
-# Initialize logger
-logger = logging.getLogger(__name__)
 
 # Global state to share key rotation across all client instances
 _global_keys = []
@@ -14,19 +8,52 @@ _global_lock = threading.Lock()
 _initialized = False
 
 def _initialize_keys():
-    """Retrieves the list of GroqAPIKeys from config_manager."""
+    """Manually parses the .env file to extract all values of GroqAPIKey, preserving duplicates."""
     global _global_keys, _initialized
     with _global_lock:
         if _initialized:
             return
         
-        _global_keys = config_manager.get_groq_api_keys()
+        keys = []
+        # Check potential paths for the .env file
+        env_paths = [".env", "../.env", "../../.env", "backend/.env"]
+        for path in env_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or line.startswith("#"):
+                                continue
+                            if "=" in line:
+                                parts = line.split("=", 1)
+                                key_name = parts[0].strip()
+                                key_val = parts[1].strip()
+                                # Strip optional surrounding quotes
+                                if (key_val.startswith('"') and key_val.endswith('"')) or \
+                                   (key_val.startswith("'") and key_val.endswith("'")):
+                                    key_val = key_val[1:-1].strip()
+                                if key_name == "GroqAPIKey" and key_val:
+                                    if key_val not in keys:
+                                        keys.append(key_val)
+                    # Stop searching once we successfully read a .env file containing keys
+                    if keys:
+                        break
+                except Exception as e:
+                    print(f"[GroqWrapper] Error reading {path} for Groq keys: {e}")
+        
+        # Fallback to the environment variable if no keys were found in the .env files
+        env_key = os.environ.get("GroqAPIKey")
+        if env_key and env_key not in keys:
+            keys.append(env_key)
+            
+        _global_keys = keys
         _initialized = True
         
         if _global_keys:
-            logger.info(f"[GroqWrapper] Loaded {len(_global_keys)} Groq API keys.")
+            print(f"[GroqWrapper] Loaded {len(_global_keys)} Groq API keys.")
         else:
-            logger.warning("[GroqWrapper] WARNING: No Groq API keys found in config_manager.")
+            print(f"[GroqWrapper] WARNING: No Groq API keys found in .env or environment variables.")
 
 class Groq:
     """A wrapper around the Groq client that supports thread-safe key rotation and automatic retry."""
@@ -58,7 +85,7 @@ class Groq:
                 self.last_sync_index = _global_current_key_index
                 key = _global_keys[self.last_sync_index]
                 masked_key = key[:8] + "..." + key[-4:] if len(key) > 12 else "..."
-                logger.info(f"[GroqWrapper] Synced client to key index {self.last_sync_index} ({masked_key})")
+                print(f"[GroqWrapper] Synced client to key index {self.last_sync_index} ({masked_key})")
                 
                 kwargs = self._kwargs.copy()
                 kwargs["api_key"] = key
@@ -71,7 +98,7 @@ class Groq:
         global _global_current_key_index
         with _global_lock:
             if len(_global_keys) <= 1:
-                logger.info("[GroqWrapper] Only one API key available. Cannot rotate.")
+                print("[GroqWrapper] Only one API key available. Cannot rotate.")
                 return False
             
             _global_current_key_index = (_global_current_key_index + 1) % len(_global_keys)
@@ -129,10 +156,10 @@ class CompletionsWrapper:
                 if is_key_error or is_groq_exception:
                     current_key = _global_keys[self.wrapper.last_sync_index] if self.wrapper.last_sync_index < len(_global_keys) else "unknown"
                     masked_key = current_key[:8] + "..." + current_key[-4:] if len(current_key) > 12 else "..."
-                    logger.warning(f"[GroqWrapper] API key error encountered with key index {self.wrapper.last_sync_index} ({masked_key}): {e}")
+                    print(f"[GroqWrapper] API key error encountered with key index {self.wrapper.last_sync_index} ({masked_key}): {e}")
                     
                     if self.wrapper.rotate_key():
-                        logger.info(f"[GroqWrapper] Retrying request with the next key index {self.wrapper.last_sync_index}...")
+                        print(f"[GroqWrapper] Retrying request with the next key index {self.wrapper.last_sync_index}...")
                         continue
                     else:
                         raise e

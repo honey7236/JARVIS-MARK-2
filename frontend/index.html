@@ -313,11 +313,7 @@
             <div class="modal-tabs">
                 <button class="tab-btn active" data-target="tab-personal">IDENTITY PROFILE</button>
                 <button class="tab-btn" data-target="tab-apis">API ACCESS KEYS</button>
-                <button class="tab-btn" data-target="tab-update">SYSTEM UPDATES</button>
             </div>
-            
-            <!-- Secure Modal Notifications -->
-            <div id="settings-notification" class="hud-notification" style="display: none;"></div>
             
             <div class="modal-body">
                 <!-- Tab 1: Personal Info -->
@@ -370,29 +366,6 @@
                         <button id="btn-save-api" class="hud-btn btn-primary">SAVE CONFIGURATION</button>
                     </div>
                 </div>
-
-                <!-- Tab 3: System Update -->
-                <div id="tab-update" class="tab-content" style="display: none;">
-                    <div class="update-info-container" style="border: 1px solid rgba(0, 243, 255, 0.2); background: rgba(0, 20, 30, 0.6); padding: 15px; border-radius: 4px; color: var(--color-cyan);">
-                        <div class="update-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <span class="hud-label" style="margin: 0; font-size: 1.1rem; letter-spacing: 2px;">CORE PROTOCOL TELEMETRY</span>
-                            <span id="update-badge" style="background: rgba(0, 243, 255, 0.1); border: 1px solid var(--color-cyan); padding: 2px 8px; font-size: 0.8rem; font-weight: bold; border-radius: 2px;">V2.0.0</span>
-                        </div>
-                        <div id="update-message" style="font-size: 0.9rem; line-height: 1.4; margin-bottom: 15px; text-shadow: 0 0 5px rgba(0, 243, 255, 0.3);">
-                            All system parameters are aligned. Checking latest build signatures...
-                        </div>
-                        <div id="update-action-container" style="display: flex; gap: 10px; align-items: center;">
-                            <button id="btn-check-update" class="hud-btn btn-primary">CHECK FOR UPDATES</button>
-                            <button id="btn-start-update" class="hud-btn btn-primary" style="display: none; background: #ff4a4a; border-color: #ff4a4a; box-shadow: 0 0 10px rgba(255,74,74,0.4);">DOWNLOAD UPDATE</button>
-                        </div>
-                        <div id="update-progress-container" style="margin-top: 15px; display: none;">
-                            <div class="progress-bar-bg" style="width: 100%; height: 8px; background: rgba(0,243,255,0.1); border: 1px solid rgba(0,243,255,0.3); border-radius: 4px; overflow: hidden; position: relative;">
-                                <div id="update-progress-fill" style="width: 0%; height: 100%; background: var(--color-cyan); box-shadow: 0 0 10px var(--color-cyan); transition: width 0.3s ease;"></div>
-                            </div>
-                            <span id="update-progress-text" style="font-size: 0.8rem; margin-top: 5px; display: inline-block;">Downloading: 0%</span>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -409,9 +382,6 @@
                 <h2 class="onboarding-title text-glow">SYSTEM INITIALIZATION PROTOCOL</h2>
                 <p class="onboarding-subtitle">CONFIGURE CORE PARAMETERS FOR DEPLOYMENT</p>
             </div>
-            
-            <!-- Onboarding Notifications -->
-            <div id="onboarding-notification" class="hud-notification" style="display: none;"></div>
             
             <div class="onboarding-body">
                 <!-- Step 1: Personal Info -->
